@@ -5,22 +5,19 @@
 [build.environment]
   NODE_VERSION = "20"
 
-# Proxy API requests to Railway backend
 [[redirects]]
   from = "/api/*"
-  to = "https://wi-production-ae1c.up.railway.app/:splat"
+  to = "${BACKEND_URL}/:splat"
   status = 200
   force = true
 
-# Proxy WebSocket requests to Railway backend
 [[redirects]]
   from = "/ws"
-  to = "https://wi-production-ae1c.up.railway.app/ws"
+  to = "${BACKEND_URL}/ws"
   status = 200
   force = true
   headers = {Connection = "upgrade", Upgrade = "websocket"}
 
-# Single-page app fallback
 [[redirects]]
   from = "/*"
   to = "/index.html"
