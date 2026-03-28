@@ -1,6 +1,6 @@
 ﻿import axios from 'axios';
 
-// No environment variable – just relative paths
+// Use relative paths – Netlify will proxy to backend
 const API = axios.create({ baseURL: '' });
 
 export const fetchProjects = () => API.get('/api/projects');

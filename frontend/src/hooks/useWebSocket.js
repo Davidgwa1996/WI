@@ -1,8 +1,9 @@
 ﻿import useWebSocket from 'react-use-websocket';
 
 export const useProjectUpdates = () => {
-  // Use relative WebSocket path – Netlify will proxy it
-  const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
+  // Build WebSocket URL from current host (Netlify will proxy)
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = `${protocol}//${window.location.host}/ws`;
 
   const { lastMessage, readyState } = useWebSocket(wsUrl, {
     onOpen: () => console.log('WebSocket connected'),
