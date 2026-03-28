@@ -1,36 +1,27 @@
-﻿import { motion } from 'framer-motion';
-import { Link } from 'react-router-dom';
+﻿// src/components/ProjectCard.jsx
+import { motion } from 'framer-motion';
+import { useSpring, animated } from 'react-spring';
 
 const ProjectCard = ({ project }) => {
-  const score = project.overall_score?.toFixed(0) || 'N/A';
-  const scoreColor = score > 75 ? 'text-green-400' : score > 50 ? 'text-yellow-400' : 'text-red-400';
+  const [{ xys }, set] = useSpring(() => ({ xys: [0, 0, 1], config: { mass: 5, tension: 350, friction: 40 } }));
+
+  const calc = (x, y) => [-(y - window.innerHeight / 2) / 100, (x - window.innerWidth / 2) / 100, 1.05];
+  const trans = (x, y, s) => `perspective(600px) rotateX(${x}deg) rotateY(${y}deg) scale(${s})`;
 
   return (
-    <motion.div
-      whileHover={{ scale: 1.02, y: -8 }}
-      transition={{ type: 'spring', stiffness: 300 }}
-      className="glass-card p-6 hover:shadow-2xl transition-shadow"
+    <animated.div
+      onMouseMove={({ clientX: x, clientY: y }) => set({ xys: calc(x, y) })}
+      onMouseLeave={() => set({ xys: [0, 0, 1] })}
+      style={{ transform: xys.to(trans) }}
+      className="p-6 rounded-2xl"
     >
-      <div className="flex justify-between items-start">
-        <h3 className="text-xl font-bold text-white">{project.name}</h3>
-        <span className={`text-2xl font-bold ${scoreColor}`}>{score}</span>
+      <h3 className="text-xl font-bold text-white">{project.name}</h3>
+      <p className="text-gray-300 mt-2 text-sm line-clamp-2">{project.description}</p>
+      <div className="mt-4 flex justify-between items-center">
+        <span className="text-cyan-400 font-mono">Score: {project.overall_score}</span>
+        <span className="text-gray-400 text-xs">ID: {project.id}</span>
       </div>
-      <p className="text-gray-300 mt-2 line-clamp-2 text-sm">{project.description || 'No description'}</p>
-      <div className="mt-4 flex flex-wrap gap-2">
-        {project.sector && <span className="bg-cyan-900/50 text-cyan-300 text-xs px-2 py-1 rounded-full">{project.sector}</span>}
-        {project.stage && <span className="bg-blue-900/50 text-blue-300 text-xs px-2 py-1 rounded-full">{project.stage}</span>}
-      </div>
-      <div className="mt-4 flex justify-between text-sm text-gray-400">
-        <span>💰 {project.funding_raised ? `$${(project.funding_raised/1e6).toFixed(1)}M` : 'N/A'}</span>
-        <span>🐦 {project.twitter_followers?.toLocaleString() || 0}</span>
-        <span>⭐ {project.github_stars?.toLocaleString() || 0}</span>
-      </div>
-      <Link to={`/project/${project.id}`}>
-        <button className="mt-4 w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 py-2 rounded-xl transition">
-          View Details
-        </button>
-      </Link>
-    </motion.div>
+    </animated.div>
   );
 };
 
