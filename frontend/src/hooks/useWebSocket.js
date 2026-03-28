@@ -5,9 +5,8 @@ export const useProjectUpdates = () => {
   const [readyState, setReadyState] = useState(0);
 
   useEffect(() => {
-    // Build WebSocket URL from current host
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    // Use environment variable if defined, otherwise default to Railway backend
+    const wsUrl = process.env.REACT_APP_WS_URL || 'wss://wi-production-ae1c.up.railway.app/ws';
     
     console.log('Connecting to WebSocket:', wsUrl);
     
