@@ -2,6 +2,7 @@
 from sqlalchemy.orm import Session
 from typing import List
 import asyncio
+import os
 
 from app import models, database, schemas
 from app.scrapers import (
@@ -14,12 +15,12 @@ from app.websocket_manager import manager
 
 app = FastAPI(title="Web3 Deal Sourcing & Market Intelligence")
 
-
+# CORS Middleware - Allow all origins for Railway
 from fastapi.middleware.cors import CORSMiddleware
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost", "http://localhost:5173", "http://127.0.0.1"],
+    allow_origins=["*"],  # Allow all origins for Railway deployment
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -119,36 +120,65 @@ def discover_new_projects(background_tasks: BackgroundTasks, db: Session = Depen
     return {"message": "Discovery initiated"}
 
 def run_ai_analysis(project, db):
-    project.llm_score = llm_analyzer.llm_early_stage_score(project)
-    project.sentiment_score = sentiment.get_sentiment_score(project.id)
-    project.momentum_score = momentum.calculate_momentum_score(project)
-    project.funding_prediction = funding_predictor.predict_funding(project)
-    project.overall_score = ensemble.overall_score(project)
+    try:
+        project.llm_score = llm_analyzer.llm_early_stage_score(project)
+    except Exception as e:
+        print(f"LLM error: {e}")
+        project.llm_score = 50.0
+    
+    try:
+        project.sentiment_score = sentiment.get_sentiment_score(project.id)
+    except Exception as e:
+        print(f"Sentiment error: {e}")
+        project.sentiment_score = 50.0
+    
+    try:
+        project.momentum_score = momentum.calculate_momentum_score(project)
+    except Exception as e:
+        print(f"Momentum error: {e}")
+        project.momentum_score = 50.0
+    
+    try:
+        project.funding_prediction = funding_predictor.predict_funding(project)
+    except Exception as e:
+        print(f"Funding prediction error: {e}")
+        project.funding_prediction = 50.0
+    
+    try:
+        project.overall_score = ensemble.overall_score(project)
+    except Exception as e:
+        print(f"Ensemble error: {e}")
+        project.overall_score = 50.0
 
-    monte_carlo_prob = monte_carlo.monte_carlo_funding_probability(project)
-    anomaly = anomaly_detection.detect_growth_spike(project)
-
-    project.extra_data['monte_carlo_prob'] = monte_carlo_prob
-    project.extra_data['anomaly_detected'] = anomaly
+    try:
+        monte_carlo_prob = monte_carlo.monte_carlo_funding_probability(project)
+        anomaly = anomaly_detection.detect_growth_spike(project)
+        project.extra_data['monte_carlo_prob'] = monte_carlo_prob
+        project.extra_data['anomaly_detected'] = anomaly
+    except Exception as e:
+        print(f"Analytics error: {e}")
 
     db.commit()
 
-    loop = asyncio.new_event_loop()
-    loop.run_until_complete(manager.broadcast({
-        "type": "full_update",
-        "project_id": project.id,
-        "overall_score": project.overall_score,
-        "llm_score": project.llm_score,
-        "sentiment_score": project.sentiment_score,
-        "funding_prediction": project.funding_prediction,
-        "momentum_score": project.momentum_score,
-        "twitter_followers": project.twitter_followers,
-        "github_stars": project.github_stars,
-        "discord_members": project.discord_members,
-        "market_cap": project.market_cap,
-        "monte_carlo_prob": monte_carlo_prob,
-        "anomaly_detected": anomaly
-    }))
+    try:
+        loop = asyncio.new_event_loop()
+        loop.run_until_complete(manager.broadcast({
+            "type": "full_update",
+            "project_id": project.id,
+            "overall_score": project.overall_score,
+            "llm_score": project.llm_score,
+            "sentiment_score": project.sentiment_score,
+            "funding_prediction": project.funding_prediction,
+            "momentum_score": project.momentum_score,
+            "twitter_followers": project.twitter_followers,
+            "github_stars": project.github_stars,
+            "discord_members": project.discord_members,
+            "market_cap": project.market_cap,
+            "monte_carlo_prob": monte_carlo_prob if 'monte_carlo_prob' in locals() else 50,
+            "anomaly_detected": anomaly if 'anomaly' in locals() else False
+        }))
+    except Exception as e:
+        print(f"Broadcast error: {e}")
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
