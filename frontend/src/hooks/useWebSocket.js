@@ -73,3 +73,6 @@ export const useWebSocket = (url = null) => {
 
   return { lastMessage, readyState, sendMessage };
 };
+
+// Alias for backward compatibility
+export const useProjectUpdates = useWebSocket;

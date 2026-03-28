@@ -46,8 +46,19 @@ export const competitorsAPI = {
   // ... other methods
 };
 
+// Backward compatibility exports for old components
+export const fetchProjects = projectsAPI.getAll;
+export const fetchProject = projectsAPI.getById;
+export const refreshProject = async (id) => {
+  // This is an alias for getById with the same functionality
+  return projectsAPI.getById(id);
+};
+
 // Default export for convenience
 export default {
   projects: projectsAPI,
   competitors: competitorsAPI,
+  fetchProjects: projectsAPI.getAll,
+  fetchProject: projectsAPI.getById,
+  refreshProject: projectsAPI.getById,
 };
