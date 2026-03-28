@@ -1,32 +1,18 @@
-﻿import { useEffect, useState } from 'react';
+﻿import useWebSocket from 'react-use-websocket';
 
 export const useProjectUpdates = () => {
-  const [lastMessage, setLastMessage] = useState(null);
-  const [readyState, setReadyState] = useState(0);
+  // Get backend URL from environment variable (e.g., set in Netlify)
+  const backendUrl = import.meta.env.VITE_API_URL || '';
+  // Build WebSocket URL: replace http/https with ws/wss and append /ws
+  const wsUrl = backendUrl
+    ? backendUrl.replace(/^http/, 'ws') + '/ws'
+    : 'ws://localhost:8000/ws';
 
-  useEffect(() => {
-    // Dynamically import react-use-websocket only if available
-    import('react-use-websocket').then((module) => {
-      const useWebSocket = module.default;
-      const ws = useWebSocket('ws://localhost:8000/ws', {
-        onOpen: () => console.log('WebSocket connected'),
-        shouldReconnect: (closeEvent) => true,
-        onMessage: (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            setLastMessage(data);
-          } catch (e) {
-            console.warn('Received non-JSON message:', event.data);
-          }
-        }
-      });
-      setReadyState(ws.readyState);
-      // Store the ws instance to clean up later
-      return ws;
-    }).catch(err => {
-      console.error('Failed to load react-use-websocket:', err);
-    });
-  }, []);
+  const { lastMessage, readyState } = useWebSocket(wsUrl, {
+    onOpen: () => console.log('WebSocket connected'),
+    shouldReconnect: (closeEvent) => true,
+    onError: (err) => console.error('WebSocket error:', err),
+  });
 
   return { lastMessage, readyState };
 };
