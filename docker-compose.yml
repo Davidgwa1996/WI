@@ -1,20 +1,20 @@
-services:
+﻿services:
   backend:
     build: ./backend
     ports:
       - "8000:8000"
     environment:
       - DATABASE_URL=postgresql://user:pass@postgres:5432/web3_intel
-      - MONGODB_URL=${MONGODB_URL}
-      - REDIS_URL=${REDIS_URL}
-      - TWITTER_BEARER_TOKEN=${TWITTER_BEARER_TOKEN}
-      - TWITTER_API_KEY=${TWITTER_API_KEY}
-      - TWITTER_API_SECRET=${TWITTER_API_SECRET}
-      - TWITTER_ACCESS_TOKEN=${TWITTER_ACCESS_TOKEN}
-      - TWITTER_ACCESS_SECRET=${TWITTER_ACCESS_SECRET}
-      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - MONGODB_URL=\
+      - REDIS_URL=\
+      - TWITTER_BEARER_TOKEN=\
+      - TWITTER_API_KEY=\
+      - TWITTER_API_SECRET=\
+      - TWITTER_ACCESS_TOKEN=\
+      - TWITTER_ACCESS_SECRET=\
+      - DISCORD_BOT_TOKEN=\
+      - OPENAI_API_KEY=\
+      - GITHUB_TOKEN=\
       - MODEL_PATH=./models/funding_predictor.pkl
       - FINBERT_MODEL=finiteautomata/bert-finetuned-sentiment
 
