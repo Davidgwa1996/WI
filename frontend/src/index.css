@@ -1,0 +1,13 @@
+﻿@import "tailwindcss";
+
+@layer base {
+  body {
+    @apply bg-gradient-to-br from-gray-950 via-gray-900 to-gray-800 text-white antialiased;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl shadow-xl;
+  }
+}

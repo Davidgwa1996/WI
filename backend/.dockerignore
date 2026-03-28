@@ -1,0 +1,6 @@
+venv
+__pycache__
+*.pyc
+.env
+.git
+models/*.pkl   # if you don't want to include the model in the image (optional)
