@@ -1,12 +1,8 @@
 ﻿import useWebSocket from 'react-use-websocket';
 
 export const useProjectUpdates = () => {
-  // Get backend URL from environment variable (e.g., set in Netlify)
-  const backendUrl = import.meta.env.VITE_API_URL || '';
-  // Build WebSocket URL: replace http/https with ws/wss and append /ws
-  const wsUrl = backendUrl
-    ? backendUrl.replace(/^http/, 'ws') + '/ws'
-    : 'ws://localhost:8000/ws';
+  // Use relative WebSocket path – Netlify will proxy it
+  const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
 
   const { lastMessage, readyState } = useWebSocket(wsUrl, {
     onOpen: () => console.log('WebSocket connected'),
