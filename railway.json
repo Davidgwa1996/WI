@@ -1,4 +1,6 @@
-{
-  "build": null,
-  "deploy": null
+﻿{
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "backend/Dockerfile"
+  }
 }
