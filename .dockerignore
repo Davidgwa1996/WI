@@ -7,4 +7,3 @@ __pycache__
 frontend/
 models/*.pkl
 celerybeat-schedule
-*.log

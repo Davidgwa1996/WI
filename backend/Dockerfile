@@ -8,16 +8,14 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements from the correct location
+# Copy requirements from the root context (because context is the repo root)
 COPY backend/requirements.txt .
 
-# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the entire backend folder
 COPY backend/ .
 
-# Set environment variables
 ENV PYTHONPATH=/app
 
 EXPOSE 8000
