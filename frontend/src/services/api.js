@@ -1,7 +1,8 @@
 ﻿// src/services/api.js
-// Get API URL from environment, with fallback for development
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 
-  (import.meta.env.DEV ? 'http://localhost:3000' : '');
+
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  'https://wi-production-ae1c.up.railway.app';
 
 console.log('[API] Using base URL:', API_BASE_URL);
 
@@ -11,7 +12,10 @@ const handleResponse = async (response) => {
     let errorMessage;
     try {
       const errorData = await response.json();
-      errorMessage = errorData.message || errorData.error || `HTTP error ${response.status}`;
+      errorMessage =
+        errorData.message ||
+        errorData.error ||
+        `HTTP error ${response.status}`;
     } catch (e) {
       errorMessage = `HTTP error ${response.status}: ${response.statusText}`;
     }
@@ -22,19 +26,14 @@ const handleResponse = async (response) => {
   return response.json();
 };
 
-// Generic fetch wrapper with timeout
+// Fetch wrapper
 const fetchAPI = async (endpoint, options = {}) => {
-  if (!API_BASE_URL) {
-    throw new Error('API_BASE_URL is not configured. Please check your environment variables.');
-  }
-  
   const url = `${API_BASE_URL}${endpoint}`;
   console.log(`[API] Fetching: ${url}`);
-  
-  // Add timeout to prevent hanging requests
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 10000);
-  
+
   try {
     const response = await fetch(url, {
       headers: {
@@ -45,51 +44,57 @@ const fetchAPI = async (endpoint, options = {}) => {
       signal: controller.signal,
       ...options,
     });
+
     clearTimeout(timeoutId);
     return await handleResponse(response);
   } catch (error) {
     clearTimeout(timeoutId);
+
     if (error.name === 'AbortError') {
-      console.error(`[API] Timeout calling ${endpoint}`);
-      throw new Error('Request timeout - server may be slow or unreachable');
+      throw new Error('Request timeout - server unreachable');
     }
+
     console.error(`[API] Error calling ${endpoint}:`, error);
     throw error;
   }
 };
 
-// Projects API
+// APIs
 export const projectsAPI = {
   getAll: () => fetchAPI('/projects'),
   getById: (id) => fetchAPI(`/projects/${id}`),
-  create: (data) => fetchAPI('/projects', { method: 'POST', body: JSON.stringify(data) }),
-  update: (id, data) => fetchAPI(`/projects/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  delete: (id) => fetchAPI(`/projects/${id}`, { method: 'DELETE' }),
+  create: (data) =>
+    fetchAPI('/projects', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  update: (id, data) =>
+    fetchAPI(`/projects/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  delete: (id) =>
+    fetchAPI(`/projects/${id}`, { method: 'DELETE' }),
 };
 
-// Competitors API
 export const competitorsAPI = {
   getAll: () => fetchAPI('/competitors'),
   getById: (id) => fetchAPI(`/competitors/${id}`),
-  create: (data) => fetchAPI('/competitors', { method: 'POST', body: JSON.stringify(data) }),
-  update: (id, data) => fetchAPI(`/competitors/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  delete: (id) => fetchAPI(`/competitors/${id}`, { method: 'DELETE' }),
-};
-
-// Export fetch functions for backwards compatibility
-export const fetchProjects = async () => {
-  const data = await projectsAPI.getAll();
-  return data;
-};
-
-export const fetchCompetitors = async () => {
-  const data = await competitorsAPI.getAll();
-  return data;
+  create: (data) =>
+    fetchAPI('/competitors', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  update: (id, data) =>
+    fetchAPI(`/competitors/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  delete: (id) =>
+    fetchAPI(`/competitors/${id}`, { method: 'DELETE' }),
 };
 
 export default {
   projects: projectsAPI,
   competitors: competitorsAPI,
-  fetchProjects,
-  fetchCompetitors,
 };
