@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 import asyncio
 import os
+import time
 
 # ------------------------------------------------------------
 # SAFE IMPORTS – fallback if any module is missing
@@ -45,11 +46,17 @@ try:
     from app.websocket_manager import manager
 except ImportError as e:
     print(f"WARNING: WebSocket manager not available: {e}")
-    # Create a dummy manager
+
     class DummyManager:
-        async def connect(self, ws): pass
-        def disconnect(self, ws): pass
-        async def broadcast(self, msg): pass
+        async def connect(self, ws):
+            pass
+
+        def disconnect(self, ws):
+            pass
+
+        async def broadcast(self, msg):
+            pass
+
     manager = DummyManager()
 
 # ------------------------------------------------------------
@@ -88,12 +95,12 @@ def root():
         "message": "Web3 Deal Sourcing & Market Intelligence Platform",
         "status": "running",
         "database_available": database is not None and database.SessionLocal is not None,
-        "mongodb_available": database is not None and hasattr(database, 'mongo_db') and database.mongo_db is not None
+        "mongodb_available": database is not None and hasattr(database, "mongo_db") and database.mongo_db is not None
     }
 
 @app.get("/health")
 def health():
-    return {"status": "healthy", "timestamp": asyncio.get_event_loop().time()}
+    return {"status": "healthy", "timestamp": time.time()}
 
 # ------------------------------------------------------------
 # Projects endpoints (only if models and database exist)
@@ -118,8 +125,6 @@ if models is not None and database is not None and schemas is not None:
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
         return project
-
-    # Additional endpoints (refresh, discover) can be added similarly
 else:
     print("WARNING: Projects endpoints disabled because models/database not available")
 
@@ -135,4 +140,6 @@ async def websocket_endpoint(websocket: WebSocket):
             if data == "ping":
                 await websocket.send_text("pong")
     except WebSocketDisconnect:
-        manager.disconnect(websocket)
+        result = manager.disconnect(websocket)
+        if asyncio.iscoroutine(result):
+            await result
