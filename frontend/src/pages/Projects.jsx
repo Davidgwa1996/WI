@@ -1,64 +1,62 @@
 ﻿// src/pages/Projects.jsx
-
-import { useEffect, useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { projectsAPI } from '../services/api';
-import { useWebSocket } from '../hooks/useWebSocket';
 import ProjectCard from '../components/ProjectCard';
-import { motion } from 'framer-motion';
 
 const Projects = () => {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const { lastMessage, readyState } = useWebSocket();
+  const [retryCount, setRetryCount] = useState(0);
 
-  useEffect(() => {
-    const loadProjects = async () => {
-      try {
-        setLoading(true);
-        const data = await projectsAPI.getAll();
-        setProjects(data);
-        setError(null);
-      } catch (err) {
-        console.error('Failed to load projects:', err);
-        setError('Failed to load projects. Please check backend connection.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadProjects();
+  const fetchProjects = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      console.log('[Projects] Fetching projects...');
+      const data = await projectsAPI.getAll();
+      console.log('[Projects] Received data:', data);
+      setProjects(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('[Projects] Error fetching projects:', err);
+      setError(err.message || 'Failed to load projects');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    if (lastMessage !== null) {
-      const data = lastMessage;
-      if (data.type === 'full_update') {
-        setProjects(prev =>
-          prev.map(p => p.id === data.project_id ? { ...p, ...data } : p)
-        );
-      }
-    }
-  }, [lastMessage]);
+    fetchProjects();
+  }, [fetchProjects, retryCount]);
+
+  const handleRetry = () => {
+    setRetryCount(prev => prev + 1);
+  };
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="text-cyan-400 text-xl">Loading projects...</div>
+      <div style={{ padding: '20px', textAlign: 'center' }}>
+        <p>Loading projects...</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-red-900/20 border border-red-500 rounded-lg p-6 text-center">
-        <p className="text-red-400 text-lg">{error}</p>
-        <p className="text-gray-400 mt-2">
-          WebSocket status: {readyState === 1 ? 'Connected' : 'Disconnected'}
+      <div style={{ padding: '20px', textAlign: 'center' }}>
+        <p style={{ color: 'red', marginBottom: '10px' }}>
+          Failed to load projects: {error}
         </p>
-        <button
-          onClick={() => window.location.reload()}
-          className="mt-4 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 rounded transition"
+        <button 
+          onClick={handleRetry}
+          style={{
+            padding: '8px 16px',
+            backgroundColor: '#007bff',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer'
+          }}
         >
           Retry
         </button>
@@ -67,39 +65,15 @@ const Projects = () => {
   }
 
   return (
-    <div>
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
-      >
-        <h1 className="text-4xl md:text-5xl font-extrabold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
-          All Projects
-        </h1>
-        <p className="text-gray-400 mt-2 text-lg">
-          Browse all AI-scouted Web3 projects
-        </p>
-        <p className="text-xs text-gray-500 mt-1">
-          WebSocket: {readyState === 1 ? '🟢 Live updates active' : '🔴 Reconnecting...'}
-        </p>
-      </motion.div>
-
-      {projects.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 my-12">
-          {projects.map((project, idx) => (
-            <motion.div
-              key={project.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: idx * 0.05 }}
-            >
-              <ProjectCard project={project} />
-            </motion.div>
-          ))}
-        </div>
+    <div style={{ padding: '20px' }}>
+      <h1>Projects</h1>
+      {projects.length === 0 ? (
+        <p>No projects yet. Add some via the API.</p>
       ) : (
-        <div className="text-center py-12 text-gray-400">
-          No projects found. Add some via the API.
+        <div style={{ display: 'grid', gap: '20px', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
+          {projects.map(project => (
+            <ProjectCard key={project.id || project._id} project={project} />
+          ))}
         </div>
       )}
     </div>

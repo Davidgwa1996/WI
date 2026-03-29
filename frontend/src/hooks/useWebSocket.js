@@ -1,78 +1,73 @@
 ﻿// src/hooks/useWebSocket.js
+import { useEffect, useRef, useState, useCallback } from 'react';
 
-import { useState, useEffect, useRef } from 'react';
+const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:3000';
 
-export const useWebSocket = (url = null) => {
+export const useWebSocket = (path) => {
+  const [isConnected, setIsConnected] = useState(false);
   const [lastMessage, setLastMessage] = useState(null);
-  const [readyState, setReadyState] = useState(0); // 0 = CONNECTING, 1 = OPEN, 2 = CLOSING, 3 = CLOSED
   const wsRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
 
-  // Use environment variable if no URL provided, fallback to Railway backend
-  const wsUrl = url || import.meta.env.VITE_WS_URL || 'wss://wi-production-ae1c.up.railway.app/ws';
+  const connect = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) return;
+
+    try {
+      const ws = new WebSocket(`${WS_URL}${path}`);
+      
+      ws.onopen = () => {
+        console.log('[WebSocket] Connected');
+        setIsConnected(true);
+        if (reconnectTimeoutRef.current) {
+          clearTimeout(reconnectTimeoutRef.current);
+        }
+      };
+      
+      ws.onclose = () => {
+        console.log('[WebSocket] Disconnected');
+        setIsConnected(false);
+        // Attempt reconnect after 3 seconds
+        reconnectTimeoutRef.current = setTimeout(() => {
+          console.log('[WebSocket] Attempting reconnect...');
+          connect();
+        }, 3000);
+      };
+      
+      ws.onmessage = (event) => {
+        console.log('[WebSocket] Message received:', event.data);
+        setLastMessage(event.data);
+      };
+      
+      ws.onerror = (error) => {
+        console.error('[WebSocket] Error:', error);
+      };
+      
+      wsRef.current = ws;
+    } catch (error) {
+      console.error('[WebSocket] Connection error:', error);
+    }
+  }, [path]);
 
   useEffect(() => {
-    const connect = () => {
-      console.log('Connecting to WebSocket:', wsUrl);
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
-
-      ws.onopen = () => {
-        console.log('WebSocket connected');
-        setReadyState(ws.readyState);
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          console.log('WebSocket message received:', data);
-          setLastMessage(data);
-        } catch (e) {
-          console.warn('Failed to parse WebSocket message:', event.data);
-        }
-      };
-
-      ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        setReadyState(ws.readyState);
-      };
-
-      ws.onclose = (event) => {
-        console.log('WebSocket disconnected. Code:', event.code, 'Reason:', event.reason);
-        setReadyState(ws.readyState);
-
-        // Attempt to reconnect after 3 seconds, unless closed intentionally
-        if (!event.wasClean) {
-          if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
-          reconnectTimeoutRef.current = setTimeout(() => {
-            console.log('Attempting to reconnect...');
-            connect();
-          }, 3000);
-        }
-      };
-    };
-
     connect();
-
+    
     return () => {
-      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.close(1000, 'Component unmounting');
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+      if (wsRef.current) {
+        wsRef.current.close();
       }
     };
-  }, [wsUrl]);
+  }, [connect]);
 
-  // Function to manually send messages
-  const sendMessage = (data) => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+  const sendMessage = useCallback((data) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(data));
     } else {
-      console.warn('WebSocket is not open. Cannot send message.');
+      console.warn('[WebSocket] Cannot send message - not connected');
     }
-  };
+  }, []);
 
-  return { lastMessage, readyState, sendMessage };
+  return { isConnected, lastMessage, sendMessage };
 };
-
-// Alias for backward compatibility
-export const useProjectUpdates = useWebSocket;

@@ -1,23 +1,29 @@
 ﻿// src/services/api.js
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 
-// Use environment variable for the base URL, fallback to localhost:3000/api
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
-
-// Helper to handle fetch responses
+// Helper to handle responses
 const handleResponse = async (response) => {
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    const error = new Error(errorData.message || `HTTP error ${response.status}`);
+    let errorMessage;
+    try {
+      const errorData = await response.json();
+      errorMessage = errorData.message || errorData.error || `HTTP error ${response.status}`;
+    } catch (e) {
+      errorMessage = `HTTP error ${response.status}: ${response.statusText}`;
+    }
+    const error = new Error(errorMessage);
     error.status = response.status;
     throw error;
   }
   return response.json();
 };
 
-// Generic fetch wrapper with error logging
+// Generic fetch wrapper
 const fetchAPI = async (endpoint, options = {}) => {
+  const url = `${API_BASE_URL}${endpoint}`;
+  console.log(`[API] Fetching: ${url}`);
   try {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const response = await fetch(url, {
       headers: {
         'Content-Type': 'application/json',
         ...options.headers,
@@ -26,7 +32,7 @@ const fetchAPI = async (endpoint, options = {}) => {
     });
     return await handleResponse(response);
   } catch (error) {
-    console.error(`API call to ${endpoint} failed:`, error);
+    console.error(`[API] Error calling ${endpoint}:`, error);
     throw error;
   }
 };
@@ -40,25 +46,7 @@ export const projectsAPI = {
   delete: (id) => fetchAPI(`/projects/${id}`, { method: 'DELETE' }),
 };
 
-// Competitors API (add more as needed)
+// Competitors API
 export const competitorsAPI = {
   getAll: () => fetchAPI('/competitors'),
-  // ... other methods
-};
-
-// Backward compatibility exports for old components
-export const fetchProjects = projectsAPI.getAll;
-export const fetchProject = projectsAPI.getById;
-export const refreshProject = async (id) => {
-  // This is an alias for getById with the same functionality
-  return projectsAPI.getById(id);
-};
-
-// Default export for convenience
-export default {
-  projects: projectsAPI,
-  competitors: competitorsAPI,
-  fetchProjects: projectsAPI.getAll,
-  fetchProject: projectsAPI.getById,
-  refreshProject: projectsAPI.getById,
 };
