@@ -1,6 +1,5 @@
-﻿from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect
+﻿from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
-from typing import List, Optional
 import asyncio
 import os
 import time
@@ -64,12 +63,24 @@ except ImportError as e:
 # ------------------------------------------------------------
 app = FastAPI(title="Web3 Deal Sourcing & Market Intelligence")
 
+# ------------------------------------------------------------
 # CORS
+# Netlify deploy previews use different subdomains, so allow all Netlify
+# origins with a regex. Credentials are disabled to avoid CORS mismatch.
+# ------------------------------------------------------------
 from fastapi.middleware.cors import CORSMiddleware
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+        "https://ukweb3.netlify.app",
+    ],
+    allow_origin_regex=r"https://.*\.netlify\.app",
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -107,7 +118,13 @@ def health():
 # ------------------------------------------------------------
 if models is not None and database is not None and schemas is not None:
     @app.get("/projects", response_model=list[schemas.ProjectOut])
-    def get_projects(skip: int = 0, limit: int = 100, stage: str = None, sector: str = None, db: Session = Depends(get_db)):
+    def get_projects(
+        skip: int = 0,
+        limit: int = 100,
+        stage: str = None,
+        sector: str = None,
+        db: Session = Depends(get_db)
+    ):
         if db is None:
             return []
         query = db.query(models.Project)
@@ -143,3 +160,11 @@ async def websocket_endpoint(websocket: WebSocket):
         result = manager.disconnect(websocket)
         if asyncio.iscoroutine(result):
             await result
+
+# ------------------------------------------------------------
+# Local run support
+# ------------------------------------------------------------
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
