@@ -1,5 +1,6 @@
 ﻿// src/services/api.js
 
+// API base URL: use env first, then fallback to your Railway backend
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
   'https://wi-production-ae1c.up.railway.app';
@@ -10,6 +11,7 @@ console.log('[API] Using base URL:', API_BASE_URL);
 const handleResponse = async (response) => {
   if (!response.ok) {
     let errorMessage;
+
     try {
       const errorData = await response.json();
       errorMessage =
@@ -19,14 +21,16 @@ const handleResponse = async (response) => {
     } catch (e) {
       errorMessage = `HTTP error ${response.status}: ${response.statusText}`;
     }
+
     const error = new Error(errorMessage);
     error.status = response.status;
     throw error;
   }
+
   return response.json();
 };
 
-// Fetch wrapper
+// Generic fetch wrapper with timeout
 const fetchAPI = async (endpoint, options = {}) => {
   const url = `${API_BASE_URL}${endpoint}`;
   console.log(`[API] Fetching: ${url}`);
@@ -38,7 +42,7 @@ const fetchAPI = async (endpoint, options = {}) => {
     const response = await fetch(url, {
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
+        Accept: 'application/json',
         ...options.headers,
       },
       signal: controller.signal,
@@ -51,7 +55,8 @@ const fetchAPI = async (endpoint, options = {}) => {
     clearTimeout(timeoutId);
 
     if (error.name === 'AbortError') {
-      throw new Error('Request timeout - server unreachable');
+      console.error(`[API] Timeout calling ${endpoint}`);
+      throw new Error('Request timeout - server may be slow or unreachable');
     }
 
     console.error(`[API] Error calling ${endpoint}:`, error);
@@ -59,7 +64,7 @@ const fetchAPI = async (endpoint, options = {}) => {
   }
 };
 
-// APIs
+// Projects API
 export const projectsAPI = {
   getAll: () => fetchAPI('/projects'),
   getById: (id) => fetchAPI(`/projects/${id}`),
@@ -73,10 +78,10 @@ export const projectsAPI = {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
-  delete: (id) =>
-    fetchAPI(`/projects/${id}`, { method: 'DELETE' }),
+  delete: (id) => fetchAPI(`/projects/${id}`, { method: 'DELETE' }),
 };
 
+// Competitors API
 export const competitorsAPI = {
   getAll: () => fetchAPI('/competitors'),
   getById: (id) => fetchAPI(`/competitors/${id}`),
@@ -90,11 +95,21 @@ export const competitorsAPI = {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
-  delete: (id) =>
-    fetchAPI(`/competitors/${id}`, { method: 'DELETE' }),
+  delete: (id) => fetchAPI(`/competitors/${id}`, { method: 'DELETE' }),
+};
+
+// Backward compatibility exports
+export const fetchProjects = async () => {
+  return await projectsAPI.getAll();
+};
+
+export const fetchCompetitors = async () => {
+  return await competitorsAPI.getAll();
 };
 
 export default {
   projects: projectsAPI,
   competitors: competitorsAPI,
+  fetchProjects,
+  fetchCompetitors,
 };
