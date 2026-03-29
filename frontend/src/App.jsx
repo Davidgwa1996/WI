@@ -6,7 +6,7 @@ import Projects from './pages/Projects';
 import ProjectDetail from './pages/ProjectDetail';
 import Competitors from './pages/Competitors';
 import Layout from './components/Layout';
-import './App.css';
+import './index.css';
 
 function App() {
   return (

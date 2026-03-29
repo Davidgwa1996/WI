@@ -1,5 +1,9 @@
 ﻿// src/services/api.js
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+// Get API URL from environment, with fallback for development
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 
+  (import.meta.env.DEV ? 'http://localhost:3000' : '');
+
+console.log('[API] Using base URL:', API_BASE_URL);
 
 // Helper to handle responses
 const handleResponse = async (response) => {
@@ -18,20 +22,37 @@ const handleResponse = async (response) => {
   return response.json();
 };
 
-// Generic fetch wrapper
+// Generic fetch wrapper with timeout
 const fetchAPI = async (endpoint, options = {}) => {
+  if (!API_BASE_URL) {
+    throw new Error('API_BASE_URL is not configured. Please check your environment variables.');
+  }
+  
   const url = `${API_BASE_URL}${endpoint}`;
   console.log(`[API] Fetching: ${url}`);
+  
+  // Add timeout to prevent hanging requests
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+  
   try {
     const response = await fetch(url, {
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
         ...options.headers,
       },
+      signal: controller.signal,
       ...options,
     });
+    clearTimeout(timeoutId);
     return await handleResponse(response);
   } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      console.error(`[API] Timeout calling ${endpoint}`);
+      throw new Error('Request timeout - server may be slow or unreachable');
+    }
     console.error(`[API] Error calling ${endpoint}:`, error);
     throw error;
   }
@@ -55,19 +76,17 @@ export const competitorsAPI = {
   delete: (id) => fetchAPI(`/competitors/${id}`, { method: 'DELETE' }),
 };
 
-// Export fetchProjects function for backwards compatibility
+// Export fetch functions for backwards compatibility
 export const fetchProjects = async () => {
   const data = await projectsAPI.getAll();
   return data;
 };
 
-// Export fetchCompetitors function
 export const fetchCompetitors = async () => {
   const data = await competitorsAPI.getAll();
   return data;
 };
 
-// Default export for convenience
 export default {
   projects: projectsAPI,
   competitors: competitorsAPI,

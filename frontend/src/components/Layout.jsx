@@ -1,38 +1,81 @@
-﻿import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
+﻿// src/components/Layout.jsx
+import React from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { 
+  FiHome, 
+  FiFolder, 
+  FiUsers, 
+  FiSettings,
+  FiZap
+} from 'react-icons/fi';
 
-const Navbar = () => (
-  <motion.nav 
-    initial={{ y: -100 }}
-    animate={{ y: 0 }}
-    transition={{ duration: 0.5 }}
-    className="sticky top-0 z-50 bg-gray-900/80 backdrop-blur-xl border-b border-white/10"
-  >
-    <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-      <Link to="/" className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
-        Web3 Intel
-      </Link>
-      <div className="space-x-6">
-        <Link to="/" className="text-gray-300 hover:text-white transition">Dashboard</Link>
-        <Link to="/projects" className="text-gray-300 hover:text-white transition">Projects</Link>
-        <Link to="/competitors" className="text-gray-300 hover:text-white transition">Competitors</Link>
-      </div>
+const Layout = ({ children }) => {
+  const location = useLocation();
+
+  const navigation = [
+    { name: 'Dashboard', href: '/dashboard', icon: FiHome },
+    { name: 'Projects', href: '/projects', icon: FiFolder },
+    { name: 'Competitors', href: '/competitors', icon: FiUsers },
+    { name: 'Settings', href: '/settings', icon: FiSettings },
+  ];
+
+  const isActive = (path) => {
+    return location.pathname === path;
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
+      {/* Sidebar */}
+      <aside className="fixed left-0 top-0 h-full w-64 bg-white/80 backdrop-blur-xl border-r border-slate-200 z-50">
+        <div className="flex flex-col h-full">
+          {/* Logo */}
+          <div className="p-6 border-b border-slate-200">
+            <div className="flex items-center gap-2">
+              <div className="w-10 h-10 bg-gradient-primary rounded-xl flex items-center justify-center">
+                <FiZap className="w-6 h-6 text-white" />
+              </div>
+              <span className="text-xl font-bold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent">
+                Web3 Intel
+              </span>
+            </div>
+          </div>
+
+          {/* Navigation */}
+          <nav className="flex-1 p-4 space-y-1">
+            {navigation.map((item) => {
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.name}
+                  to={item.href}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                    isActive(item.href)
+                      ? 'bg-gradient-primary text-white shadow-lg shadow-cyan-500/20'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <Icon className="w-5 h-5" />
+                  <span className="font-medium">{item.name}</span>
+                </Link>
+              );
+            })}
+          </nav>
+
+          {/* Footer */}
+          <div className="p-4 border-t border-slate-200">
+            <div className="text-xs text-slate-500 text-center">
+              © 2024 Web3 Intel
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <main className="ml-64">
+        {children}
+      </main>
     </div>
-  </motion.nav>
-);
-
-const Layout = ({ children }) => (
-  <div className="min-h-screen">
-    <Navbar />
-    <motion.main
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-      className="container mx-auto px-4 py-8"
-    >
-      {children}
-    </motion.main>
-  </div>
-);
+  );
+};
 
 export default Layout;
