@@ -1,104 +1,118 @@
 ﻿// src/services/api.js
 
-// API base URL: use env first, then fallback to your Railway backend
+// ✅ Use Railway backend (fallback ensures production works even without env)
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
-  'https://wi-production-ae1c.up.railway.app';
+  "https://wi-production-ae1c.up.railway.app";
 
-console.log('[API] Using base URL:', API_BASE_URL);
+console.log("[API] Base URL:", API_BASE_URL);
 
-// Helper to handle responses
+// ------------------------------------------------------------
+// Response handler
+// ------------------------------------------------------------
 const handleResponse = async (response) => {
   if (!response.ok) {
-    let errorMessage;
+    let message = `HTTP ${response.status}`;
 
     try {
-      const errorData = await response.json();
-      errorMessage =
-        errorData.message ||
-        errorData.error ||
-        `HTTP error ${response.status}`;
-    } catch (e) {
-      errorMessage = `HTTP error ${response.status}: ${response.statusText}`;
-    }
+      const data = await response.json();
+      message = data.message || data.error || message;
+    } catch {}
 
-    const error = new Error(errorMessage);
-    error.status = response.status;
-    throw error;
+    throw new Error(message);
   }
 
   return response.json();
 };
 
-// Generic fetch wrapper with timeout
+// ------------------------------------------------------------
+// Fetch wrapper (with timeout)
+// ------------------------------------------------------------
 const fetchAPI = async (endpoint, options = {}) => {
   const url = `${API_BASE_URL}${endpoint}`;
-  console.log(`[API] Fetching: ${url}`);
+  console.log("[API] Request:", url);
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10000);
+  const timeout = setTimeout(() => controller.abort(), 10000);
 
   try {
-    const response = await fetch(url, {
+    const res = await fetch(url, {
       headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
+        "Content-Type": "application/json",
+        Accept: "application/json",
         ...options.headers,
       },
       signal: controller.signal,
       ...options,
     });
 
-    clearTimeout(timeoutId);
-    return await handleResponse(response);
-  } catch (error) {
-    clearTimeout(timeoutId);
+    clearTimeout(timeout);
+    return await handleResponse(res);
+  } catch (err) {
+    clearTimeout(timeout);
 
-    if (error.name === 'AbortError') {
-      console.error(`[API] Timeout calling ${endpoint}`);
-      throw new Error('Request timeout - server may be slow or unreachable');
+    if (err.name === "AbortError") {
+      throw new Error("Request timeout");
     }
 
-    console.error(`[API] Error calling ${endpoint}:`, error);
-    throw error;
+    console.error("[API ERROR]", endpoint, err);
+    throw err;
   }
 };
 
-// Projects API
+// ------------------------------------------------------------
+// PROJECTS API
+// ------------------------------------------------------------
 export const projectsAPI = {
-  getAll: () => fetchAPI('/projects'),
+  getAll: () => fetchAPI("/projects"),
   getById: (id) => fetchAPI(`/projects/${id}`),
+
   create: (data) =>
-    fetchAPI('/projects', {
-      method: 'POST',
+    fetchAPI("/projects", {
+      method: "POST",
       body: JSON.stringify(data),
     }),
+
   update: (id, data) =>
     fetchAPI(`/projects/${id}`, {
-      method: 'PUT',
+      method: "PUT",
       body: JSON.stringify(data),
     }),
-  delete: (id) => fetchAPI(`/projects/${id}`, { method: 'DELETE' }),
+
+  delete: (id) =>
+    fetchAPI(`/projects/${id}`, {
+      method: "DELETE",
+    }),
 };
 
-// Competitors API
+// ------------------------------------------------------------
+// COMPETITORS API
+// ------------------------------------------------------------
 export const competitorsAPI = {
-  getAll: () => fetchAPI('/competitors'),
+  getAll: () => fetchAPI("/competitors"),
   getById: (id) => fetchAPI(`/competitors/${id}`),
+
   create: (data) =>
-    fetchAPI('/competitors', {
-      method: 'POST',
+    fetchAPI("/competitors", {
+      method: "POST",
       body: JSON.stringify(data),
     }),
+
   update: (id, data) =>
     fetchAPI(`/competitors/${id}`, {
-      method: 'PUT',
+      method: "PUT",
       body: JSON.stringify(data),
     }),
-  delete: (id) => fetchAPI(`/competitors/${id}`, { method: 'DELETE' }),
+
+  delete: (id) =>
+    fetchAPI(`/competitors/${id}`, {
+      method: "DELETE",
+    }),
 };
 
-// Backward compatibility exports
+// ------------------------------------------------------------
+// BACKWARD COMPATIBILITY (IMPORTANT)
+// ------------------------------------------------------------
 export const fetchProjects = async () => {
   return await projectsAPI.getAll();
 };
@@ -107,6 +121,9 @@ export const fetchCompetitors = async () => {
   return await competitorsAPI.getAll();
 };
 
+// ------------------------------------------------------------
+// EXPORT DEFAULT
+// ------------------------------------------------------------
 export default {
   projects: projectsAPI,
   competitors: competitorsAPI,
