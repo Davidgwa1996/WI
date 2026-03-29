@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:3000';
 
+// Main WebSocket hook
 export const useWebSocket = (path) => {
   const [isConnected, setIsConnected] = useState(false);
   const [lastMessage, setLastMessage] = useState(null);
@@ -71,3 +72,48 @@ export const useWebSocket = (path) => {
 
   return { isConnected, lastMessage, sendMessage };
 };
+
+// Hook for project updates
+export const useProjectUpdates = (projectId) => {
+  const [updates, setUpdates] = useState([]);
+  const { isConnected, lastMessage } = useWebSocket('/ws');
+  
+  useEffect(() => {
+    if (lastMessage && projectId) {
+      try {
+        const data = JSON.parse(lastMessage);
+        if (data.projectId === projectId) {
+          setUpdates(prev => [...prev, data]);
+        }
+      } catch (e) {
+        console.error('Failed to parse WebSocket message:', e);
+      }
+    }
+  }, [lastMessage, projectId]);
+  
+  return { updates, isConnected };
+};
+
+// Hook for real-time competitor data
+export const useCompetitorUpdates = () => {
+  const [competitors, setCompetitors] = useState([]);
+  const { isConnected, lastMessage } = useWebSocket('/competitors');
+  
+  useEffect(() => {
+    if (lastMessage) {
+      try {
+        const data = JSON.parse(lastMessage);
+        if (data.type === 'competitor_update') {
+          setCompetitors(prev => [...prev, data.competitor]);
+        }
+      } catch (e) {
+        console.error('Failed to parse competitor update:', e);
+      }
+    }
+  }, [lastMessage]);
+  
+  return { competitors, isConnected };
+};
+
+// Default export for convenience
+export default useWebSocket;

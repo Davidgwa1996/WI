@@ -49,4 +49,28 @@ export const projectsAPI = {
 // Competitors API
 export const competitorsAPI = {
   getAll: () => fetchAPI('/competitors'),
+  getById: (id) => fetchAPI(`/competitors/${id}`),
+  create: (data) => fetchAPI('/competitors', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id, data) => fetchAPI(`/competitors/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id) => fetchAPI(`/competitors/${id}`, { method: 'DELETE' }),
+};
+
+// Export fetchProjects function for backwards compatibility
+export const fetchProjects = async () => {
+  const data = await projectsAPI.getAll();
+  return data;
+};
+
+// Export fetchCompetitors function
+export const fetchCompetitors = async () => {
+  const data = await competitorsAPI.getAll();
+  return data;
+};
+
+// Default export for convenience
+export default {
+  projects: projectsAPI,
+  competitors: competitorsAPI,
+  fetchProjects,
+  fetchCompetitors,
 };
