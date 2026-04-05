@@ -38,10 +38,11 @@ if engine is not None:
         print(f"Warning: PostgreSQL session setup failed: {e}")
         SessionLocal = None
 
-# Optional MongoDB
+
 if settings.MONGODB_URL:
     try:
         from pymongo import MongoClient
+
         mongo_client = MongoClient(settings.MONGODB_URL)
         mongo_db = mongo_client["web3_intel"]
     except Exception as e:
@@ -67,5 +68,6 @@ def get_mongo_db():
 
 def init_db():
     from app.models import Base
+
     if engine is not None:
         Base.metadata.create_all(bind=engine)

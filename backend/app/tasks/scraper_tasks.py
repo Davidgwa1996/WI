@@ -10,14 +10,8 @@ from app.models import Project
 # Optional imports with safe fallback
 # ------------------------------------------------------------
 twitter = github = discord = coingecko = defillama = None
-
-llm_analyzer = sentiment = momentum = funding_predictor = ensemble = None
-
-monte_carlo_funding_probability = None
+momentum = funding_predictor = ensemble = None
 detect_growth_spike = None
-calculate_correlation = None
-sentiment_momentum = None
-
 publish_event = None
 
 try:
@@ -26,17 +20,12 @@ except Exception as e:
     print(f"Warning: scraper modules not available: {e}")
 
 try:
-    from app.ai import llm_analyzer, sentiment, momentum, funding_predictor, ensemble
+    from app.ai import momentum, funding_predictor, ensemble
 except Exception as e:
     print(f"Warning: AI modules not available: {e}")
 
 try:
-    from app.analytics import (
-        monte_carlo_funding_probability,
-        detect_growth_spike,
-        calculate_correlation,
-        sentiment_momentum
-    )
+    from app.analytics import detect_growth_spike
 except Exception as e:
     print(f"Warning: analytics modules not available: {e}")
 
@@ -61,6 +50,18 @@ def _ensure_dict(value):
     return value if isinstance(value, dict) else {}
 
 
+def _project_text(project: Project) -> str:
+    return " ".join(
+        [
+            str(project.name or ""),
+            str(project.description or ""),
+            str(project.sector or ""),
+            str(project.stage or ""),
+            str(project.token_symbol or ""),
+        ]
+    ).strip()
+
+
 # ------------------------------------------------------------
 # Main Celery task
 # ------------------------------------------------------------
@@ -69,7 +70,7 @@ def update_all_projects():
     if SessionLocal is None:
         return {
             "status": "failed",
-            "reason": "Database session is not available"
+            "reason": "Database session is not available",
         }
 
     db = SessionLocal()
@@ -100,88 +101,72 @@ def update_all_projects():
 
                 # ------------------------------------------------------------
                 # AI scores
+                # Heavy AI libraries are loaded lazily inside worker-side modules
                 # ------------------------------------------------------------
+                try:
+                    from app.ai import llm_analyzer, sentiment
+                except Exception as e:
+                    print(f"Warning: advanced AI modules not available: {e}")
+                    llm_analyzer = None
+                    sentiment = None
+
+                project_text = _project_text(project)
+
                 if llm_analyzer and hasattr(llm_analyzer, "llm_early_stage_score"):
                     project.llm_score = _safe_call(
                         llm_analyzer.llm_early_stage_score,
                         project.llm_score,
-                        project
+                        project,
                     )
 
                 if sentiment and hasattr(sentiment, "get_sentiment_score"):
                     project.sentiment_score = _safe_call(
                         sentiment.get_sentiment_score,
                         project.sentiment_score,
-                        project.id
+                        project.id,
+                        text=project_text,
                     )
 
                 if momentum and hasattr(momentum, "calculate_momentum_score"):
                     project.momentum_score = _safe_call(
                         momentum.calculate_momentum_score,
                         project.momentum_score,
-                        project
+                        project,
                     )
 
                 if funding_predictor and hasattr(funding_predictor, "predict_funding"):
                     project.funding_prediction = _safe_call(
                         funding_predictor.predict_funding,
                         project.funding_prediction,
-                        project
+                        project,
                     )
 
                 if ensemble and hasattr(ensemble, "overall_score"):
                     project.overall_score = _safe_call(
                         ensemble.overall_score,
                         project.overall_score,
-                        project
+                        project,
                     )
 
                 # ------------------------------------------------------------
                 # Advanced analytics
                 # ------------------------------------------------------------
-                monte_carlo_prob = None
                 anomaly_detected = None
-                correlation_value = None
-                sentiment_trend = None
-
-                if monte_carlo_funding_probability:
-                    monte_carlo_prob = _safe_call(
-                        monte_carlo_funding_probability,
-                        None,
-                        project
-                    )
 
                 if detect_growth_spike:
                     anomaly_detected = _safe_call(
                         detect_growth_spike,
                         None,
-                        project
-                    )
-
-                if calculate_correlation:
-                    correlation_value = _safe_call(
-                        calculate_correlation,
-                        None,
-                        project
-                    )
-
-                if sentiment_momentum:
-                    sentiment_trend = _safe_call(
-                        sentiment_momentum,
-                        None,
-                        project.id
+                        project,
                     )
 
                 # ------------------------------------------------------------
-                # Store analytics in extra_data safely
+                # Store analytics safely
                 # ------------------------------------------------------------
                 project.extra_data = _ensure_dict(project.extra_data)
-                project.extra_data["monte_carlo_prob"] = monte_carlo_prob
                 project.extra_data["anomaly_detected"] = anomaly_detected
-                project.extra_data["correlation"] = correlation_value
-                project.extra_data["sentiment_trend"] = sentiment_trend
+                project.extra_data["last_project_text"] = project_text
 
-                # Optional model fields if present
                 if hasattr(project, "anomaly_score") and anomaly_detected is not None:
                     project.anomaly_score = 1.0 if anomaly_detected else 0.0
 
@@ -200,43 +185,48 @@ def update_all_projects():
                 updated_count += 1
 
                 # ------------------------------------------------------------
-                # Publish real-time event through Redis pub/sub
+                # Publish realtime event through Redis pub/sub
                 # ------------------------------------------------------------
                 if publish_event and settings.ENABLE_REDIS:
                     try:
                         asyncio.run(
-                            publish_event({
-                                "type": "full_update",
-                                "message": f"Project {project.name} updated",
-                                "data": {
-                                    "project_id": project.id,
-                                    "name": project.name,
-                                    "sector": project.sector,
-                                    "stage": project.stage,
-                                    "overall_score": project.overall_score,
-                                    "llm_score": project.llm_score,
-                                    "sentiment_score": project.sentiment_score,
-                                    "funding_prediction": project.funding_prediction,
-                                    "momentum_score": project.momentum_score,
-                                    "twitter_followers": project.twitter_followers,
-                                    "twitter_follower_growth_30d": project.twitter_follower_growth_30d,
-                                    "github_stars": project.github_stars,
-                                    "github_star_growth_30d": project.github_star_growth_30d,
-                                    "discord_members": project.discord_members,
-                                    "discord_growth_30d": project.discord_growth_30d,
-                                    "market_cap": project.market_cap,
-                                    "total_volume": project.total_volume,
-                                    "tvl": project.tvl,
-                                    "monte_carlo_prob": monte_carlo_prob,
-                                    "anomaly_detected": anomaly_detected,
-                                    "correlation": correlation_value,
-                                    "sentiment_trend": sentiment_trend,
-                                    "updated_at": project.updated_at.isoformat()
+                            publish_event(
+                                {
+                                    "type": "full_update",
+                                    "message": f"Project {project.name} updated",
+                                    "data": {
+                                        "project_id": project.id,
+                                        "name": project.name,
+                                        "description": project.description,
+                                        "website": project.website,
+                                        "twitter_handle": project.twitter_handle,
+                                        "token_symbol": project.token_symbol,
+                                        "sector": project.sector,
+                                        "stage": project.stage,
+                                        "overall_score": project.overall_score,
+                                        "llm_score": project.llm_score,
+                                        "sentiment_score": project.sentiment_score,
+                                        "funding_prediction": project.funding_prediction,
+                                        "momentum_score": project.momentum_score,
+                                        "twitter_followers": project.twitter_followers,
+                                        "twitter_follower_growth_30d": project.twitter_follower_growth_30d,
+                                        "github_stars": project.github_stars,
+                                        "github_star_growth_30d": project.github_star_growth_30d,
+                                        "discord_members": project.discord_members,
+                                        "discord_growth_30d": project.discord_growth_30d,
+                                        "market_cap": project.market_cap,
+                                        "total_volume": project.total_volume,
+                                        "tvl": project.tvl,
+                                        "anomaly_detected": anomaly_detected,
+                                        "updated_at": project.updated_at.isoformat(),
+                                    },
                                 }
-                            })
+                            )
                         )
                     except Exception as e:
-                        print(f"Warning: realtime publish failed for project {project.id}: {e}")
+                        print(
+                            f"Warning: realtime publish failed for project {project.id}: {e}"
+                        )
 
             except Exception as e:
                 db.rollback()
@@ -244,7 +234,7 @@ def update_all_projects():
 
         return {
             "status": "success",
-            "updated_count": updated_count
+            "updated_count": updated_count,
         }
 
     except Exception as e:
@@ -252,7 +242,7 @@ def update_all_projects():
         print(f"Error running update_all_projects: {e}")
         return {
             "status": "failed",
-            "reason": str(e)
+            "reason": str(e),
         }
 
     finally:
