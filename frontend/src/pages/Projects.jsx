@@ -12,6 +12,7 @@ import {
 } from "react-icons/fi";
 
 import { projectsAPI } from "../services/api";
+import { useDashboardStream } from "../hooks/useWebSocket";
 import DashboardShell from "../components/dashboard/DashboardShell";
 import Sidebar from "../components/dashboard/Sidebar";
 import Topbar from "../components/dashboard/Topbar";
@@ -30,6 +31,8 @@ const Projects = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+
+  const { isConnected, projectEvents } = useDashboardStream();
 
   const loadProjects = async () => {
     setLoading(true);
@@ -50,6 +53,79 @@ const Projects = () => {
     document.title = "Web3 Intel Platform | Projects";
     loadProjects();
   }, []);
+
+  useEffect(() => {
+    if (!projectEvents?.length) return;
+
+    const latest = projectEvents[0];
+    const payload = latest?.data;
+
+    if (!payload?.project_id) return;
+
+    setProjects((prev) => {
+      const next = [...prev];
+      const index = next.findIndex((p) => p.id === payload.project_id);
+
+      const updatedProject = {
+        ...(index >= 0 ? next[index] : {}),
+        id: payload.project_id,
+        name: payload.name || (index >= 0 ? next[index]?.name : "Unnamed Project"),
+        description:
+          payload.description ?? (index >= 0 ? next[index]?.description : ""),
+        website: payload.website ?? (index >= 0 ? next[index]?.website : ""),
+        twitter_handle:
+          payload.twitter_handle ?? (index >= 0 ? next[index]?.twitter_handle : ""),
+        token_symbol:
+          payload.token_symbol ?? (index >= 0 ? next[index]?.token_symbol : ""),
+        sector: payload.sector || (index >= 0 ? next[index]?.sector : null),
+        stage: payload.stage || (index >= 0 ? next[index]?.stage : null),
+        overall_score:
+          payload.overall_score ?? (index >= 0 ? next[index]?.overall_score : 0),
+        llm_score: payload.llm_score ?? (index >= 0 ? next[index]?.llm_score : 0),
+        sentiment_score:
+          payload.sentiment_score ??
+          (index >= 0 ? next[index]?.sentiment_score : 0),
+        funding_prediction:
+          payload.funding_prediction ??
+          (index >= 0 ? next[index]?.funding_prediction : 0),
+        momentum_score:
+          payload.momentum_score ??
+          (index >= 0 ? next[index]?.momentum_score : 0),
+        twitter_followers:
+          payload.twitter_followers ??
+          (index >= 0 ? next[index]?.twitter_followers : 0),
+        twitter_follower_growth_30d:
+          payload.twitter_follower_growth_30d ??
+          (index >= 0 ? next[index]?.twitter_follower_growth_30d : 0),
+        github_stars:
+          payload.github_stars ?? (index >= 0 ? next[index]?.github_stars : 0),
+        github_star_growth_30d:
+          payload.github_star_growth_30d ??
+          (index >= 0 ? next[index]?.github_star_growth_30d : 0),
+        discord_members:
+          payload.discord_members ??
+          (index >= 0 ? next[index]?.discord_members : 0),
+        discord_growth_30d:
+          payload.discord_growth_30d ??
+          (index >= 0 ? next[index]?.discord_growth_30d : 0),
+        market_cap:
+          payload.market_cap ?? (index >= 0 ? next[index]?.market_cap : 0),
+        total_volume:
+          payload.total_volume ?? (index >= 0 ? next[index]?.total_volume : 0),
+        tvl: payload.tvl ?? (index >= 0 ? next[index]?.tvl : 0),
+        updated_at:
+          payload.updated_at ?? (index >= 0 ? next[index]?.updated_at : null),
+      };
+
+      if (index >= 0) {
+        next[index] = updatedProject;
+      } else {
+        next.unshift(updatedProject);
+      }
+
+      return next;
+    });
+  }, [projectEvents]);
 
   const handleRetry = () => {
     loadProjects();
@@ -79,7 +155,8 @@ const Projects = () => {
   const totalProjects = enrichedProjects.length;
 
   const highScoreProjects = useMemo(
-    () => enrichedProjects.filter((p) => Number(p.overall_score || 0) >= 80).length,
+    () =>
+      enrichedProjects.filter((p) => Number(p.overall_score || 0) >= 80).length,
     [enrichedProjects]
   );
 
@@ -145,7 +222,7 @@ const Projects = () => {
       <div className="min-w-0 flex-1">
         <DashboardShell>
           <Topbar
-            connected={true}
+            connected={isConnected}
             onRefresh={handleRefresh}
             loading={refreshing}
           />

@@ -1,14 +1,13 @@
-﻿// src/pages/Competitors.jsx
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+﻿import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { fetchCompetitors } from "../services/api";
-import { useCompetitorUpdates } from "../hooks/useWebSocket";
+import { useCompetitorUpdates, useDashboardStream } from "../hooks/useWebSocket";
 import {
   FiUsers,
   FiTrendingUp,
   FiActivity,
   FiRefreshCw,
   FiBarChart2,
-  FiAlertCircle
+  FiAlertCircle,
 } from "react-icons/fi";
 
 import DashboardShell from "../components/dashboard/DashboardShell";
@@ -23,10 +22,8 @@ const Competitors = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
-  const {
-    competitors: realtimeCompetitors,
-    isConnected
-  } = useCompetitorUpdates();
+  const { competitors: realtimeCompetitors } = useCompetitorUpdates();
+  const { isConnected } = useDashboardStream();
 
   const loadCompetitors = useCallback(async () => {
     setLoading(true);
@@ -38,8 +35,7 @@ const Competitors = () => {
     } catch (err) {
       console.error("[Competitors] Load failed:", err);
       setError(
-        err?.message ||
-          "Competitors data is not available right now."
+        err?.message || "Competitors data is not available right now."
       );
     } finally {
       setLoading(false);
@@ -52,13 +48,14 @@ const Competitors = () => {
   }, [loadCompetitors]);
 
   useEffect(() => {
-    if (!realtimeCompetitors.length) return;
+    if (!realtimeCompetitors?.length) return;
 
     setCompetitors((prev) => {
       const updated = [...prev];
 
       realtimeCompetitors.forEach((incoming) => {
-        const index = updated.findIndex((item) => item.id === incoming.id);
+        const incomingId = incoming?.id;
+        const index = updated.findIndex((item) => item.id === incomingId);
 
         if (index >= 0) {
           updated[index] = { ...updated[index], ...incoming };
@@ -78,6 +75,7 @@ const Competitors = () => {
   const handleRefresh = async () => {
     try {
       setRefreshing(true);
+      setError("");
       await loadCompetitors();
     } finally {
       setRefreshing(false);
@@ -88,51 +86,67 @@ const Competitors = () => {
 
   const averageStrength = useMemo(() => {
     if (!competitors.length) return "0";
+
     const total = competitors.reduce(
-      (sum, item) => sum + Number(item.strengthScore || item.strength_score || 0),
+      (sum, item) =>
+        sum + Number(item.strengthScore ?? item.strength_score ?? 0),
       0
     );
+
     return Math.round(total / competitors.length).toString();
   }, [competitors]);
 
   const averageMarketShare = useMemo(() => {
     if (!competitors.length) return "0%";
+
     const total = competitors.reduce(
-      (sum, item) => sum + Number(item.marketShare || item.market_share || 0),
+      (sum, item) =>
+        sum + Number(item.marketShare ?? item.market_share ?? 0),
       0
     );
+
     return `${Math.round(total / competitors.length)}%`;
   }, [competitors]);
 
   if (loading) {
     return (
-      <DashboardShell>
-        <div className="flex min-h-[60vh] items-center justify-center">
-          <div className="text-center">
-            <div className="loading-spinner mx-auto" />
-            <p className="mt-4 font-medium text-slate-600">
-              Loading competitors...
-            </p>
-          </div>
+      <div className="min-h-screen bg-slate-50 xl:flex">
+        <Sidebar />
+        <div className="min-w-0 flex-1">
+          <DashboardShell>
+            <div className="flex min-h-[60vh] items-center justify-center">
+              <div className="text-center">
+                <div className="loading-spinner mx-auto" />
+                <p className="mt-4 font-medium text-slate-600">
+                  Loading competitors...
+                </p>
+              </div>
+            </div>
+          </DashboardShell>
         </div>
-      </DashboardShell>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <DashboardShell>
-        <ErrorState
-          error={error}
-          onRetry={handleRetry}
-          title="Competitor data unavailable"
-          message={
-            error.includes("not implemented")
-              ? "The competitors backend is not implemented yet. The page is ready for it and will work once those endpoints are added."
-              : error
-          }
-        />
-      </DashboardShell>
+      <div className="min-h-screen bg-slate-50 xl:flex">
+        <Sidebar />
+        <div className="min-w-0 flex-1">
+          <DashboardShell>
+            <ErrorState
+              error={error}
+              onRetry={handleRetry}
+              title="Competitor data unavailable"
+              message={
+                error.includes("not implemented")
+                  ? "The competitors backend is not implemented yet. The page is ready and will work once those endpoints are added."
+                  : error
+              }
+            />
+          </DashboardShell>
+        </div>
+      </div>
     );
   }
 
@@ -199,7 +213,9 @@ const Competitors = () => {
                 disabled={refreshing}
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 font-semibold text-slate-800 transition hover:bg-slate-50 disabled:opacity-70"
               >
-                <FiRefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+                <FiRefreshCw
+                  className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
+                />
                 {refreshing ? "Refreshing..." : "Reload"}
               </button>
             </div>
@@ -222,11 +238,22 @@ const Competitors = () => {
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
                 {competitors.map((competitor, idx) => {
                   const name = competitor.name || "Unknown Competitor";
-                  const marketShare = competitor.marketShare ?? competitor.market_share ?? "N/A";
-                  const strengthScore =
+                  const rawMarketShare =
+                    competitor.marketShare ?? competitor.market_share;
+                  const rawStrengthScore =
                     competitor.strengthScore ?? competitor.strength_score ?? 75;
                   const description =
                     competitor.description || "No description available.";
+
+                  const marketShare =
+                    rawMarketShare === undefined || rawMarketShare === null
+                      ? "N/A"
+                      : rawMarketShare;
+
+                  const strengthScore = Math.max(
+                    0,
+                    Math.min(100, Number(rawStrengthScore || 0))
+                  );
 
                   return (
                     <div
@@ -243,7 +270,8 @@ const Competitors = () => {
                             {name}
                           </h3>
                           <p className="text-sm text-slate-500">
-                            Market Share: {marketShare}%
+                            Market Share: {marketShare}
+                            {marketShare === "N/A" ? "" : "%"}
                           </p>
                         </div>
                       </div>
@@ -265,12 +293,7 @@ const Competitors = () => {
                         <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
                           <div
                             className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-teal-500 transition-all duration-500"
-                            style={{
-                              width: `${Math.max(
-                                0,
-                                Math.min(100, Number(strengthScore || 0))
-                              )}%`
-                            }}
+                            style={{ width: `${strengthScore}%` }}
                           />
                         </div>
                       </div>
