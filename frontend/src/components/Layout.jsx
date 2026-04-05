@@ -1,79 +1,69 @@
-﻿// src/components/Layout.jsx
-import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { 
-  FiHome, 
-  FiFolder, 
-  FiUsers, 
+﻿import React from "react";
+import { Link, useLocation } from "react-router-dom";
+import {
+  FiHome,
+  FiFolder,
+  FiUsers,
   FiSettings,
-  FiZap
-} from 'react-icons/fi';
+} from "react-icons/fi";
+
+const navItems = [
+  { label: "Dashboard", to: "/dashboard", icon: FiHome },
+  { label: "Projects", to: "/projects", icon: FiFolder },
+  { label: "Competitors", to: "/competitors", icon: FiUsers },
+  { label: "Settings", to: "/dashboard", icon: FiSettings },
+];
 
 const Layout = ({ children }) => {
   const location = useLocation();
-
-  const navigation = [
-    { name: 'Dashboard', href: '/dashboard', icon: FiHome },
-    { name: 'Projects', href: '/projects', icon: FiFolder },
-    { name: 'Competitors', href: '/competitors', icon: FiUsers },
-    { name: 'Settings', href: '/settings', icon: FiSettings },
-  ];
-
-  const isActive = (path) => {
-    return location.pathname === path;
-  };
+  const year = new Date().getFullYear();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
-      {/* Sidebar */}
-      <aside className="fixed left-0 top-0 h-full w-64 bg-white/80 backdrop-blur-xl border-r border-slate-200 z-50">
-        <div className="flex flex-col h-full">
-          {/* Logo */}
-          <div className="p-6 border-b border-slate-200">
-            <div className="flex items-center gap-2">
-              <div className="w-10 h-10 bg-gradient-primary rounded-xl flex items-center justify-center">
-                <FiZap className="w-6 h-6 text-white" />
-              </div>
-              <span className="text-xl font-bold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent">
-                Web3 Intel
-              </span>
-            </div>
+    <div className="min-h-screen bg-slate-50 lg:flex">
+      <aside className="w-full border-b border-slate-200 bg-white lg:min-h-screen lg:w-72 lg:border-b-0 lg:border-r">
+        <div className="flex h-full flex-col">
+          <div className="border-b border-slate-100 px-6 py-7">
+            <Link to="/" className="text-3xl font-black tracking-tight text-cyan-700">
+              Web3 Intel
+            </Link>
+            <p className="mt-2 text-sm text-slate-500">
+              AI-powered Web3 intelligence platform
+            </p>
           </div>
 
-          {/* Navigation */}
-          <nav className="flex-1 p-4 space-y-1">
-            {navigation.map((item) => {
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.name}
-                  to={item.href}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                    isActive(item.href)
-                      ? 'bg-gradient-primary text-white shadow-lg shadow-cyan-500/20'
-                      : 'text-slate-600 hover:bg-slate-100'
-                  }`}
-                >
-                  <Icon className="w-5 h-5" />
-                  <span className="font-medium">{item.name}</span>
-                </Link>
-              );
-            })}
+          <nav className="flex-1 px-4 py-6">
+            <div className="space-y-2">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                const active =
+                  location.pathname === item.to ||
+                  (item.to !== "/" && location.pathname.startsWith(item.to));
+
+                return (
+                  <Link
+                    key={item.label}
+                    to={item.to}
+                    className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-base font-medium transition ${
+                      active
+                        ? "bg-gradient-to-r from-cyan-500 to-teal-500 text-white shadow-lg"
+                        : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                    }`}
+                  >
+                    <Icon className="h-5 w-5" />
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </div>
           </nav>
 
-          {/* Footer */}
-          <div className="p-4 border-t border-slate-200">
-            <div className="text-xs text-slate-500 text-center">
-              © 2024 Web3 Intel
-            </div>
+          <div className="border-t border-slate-100 px-6 py-5 text-sm text-slate-500">
+            © {year} Web3 Intel Platform
           </div>
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="ml-64">
-        {children}
-      </main>
+      <main className="min-w-0 flex-1">{children}</main>
     </div>
   );
 };

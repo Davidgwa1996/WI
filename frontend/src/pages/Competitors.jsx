@@ -1,356 +1,314 @@
 ﻿// src/pages/Competitors.jsx
-import React, { useState, useEffect, useCallback } from 'react';
-import { fetchCompetitors, competitorsAPI } from '../services/api';
-import { useCompetitorUpdates } from '../hooks/useWebSocket';
-import { FiUsers, FiTrendingUp, FiActivity, FiRefreshCw, FiBarChart2 } from 'react-icons/fi';
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { fetchCompetitors } from "../services/api";
+import { useCompetitorUpdates } from "../hooks/useWebSocket";
+import {
+  FiUsers,
+  FiTrendingUp,
+  FiActivity,
+  FiRefreshCw,
+  FiBarChart2,
+  FiAlertCircle
+} from "react-icons/fi";
+
+import DashboardShell from "../components/dashboard/DashboardShell";
+import Sidebar from "../components/dashboard/Sidebar";
+import Topbar from "../components/dashboard/Topbar";
+import KpiCard from "../components/dashboard/KpiCard";
+import ErrorState from "../components/ErrorState";
 
 const Competitors = () => {
   const [competitors, setCompetitors] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const { competitors: realtimeCompetitors, isConnected } = useCompetitorUpdates();
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState("");
+
+  const {
+    competitors: realtimeCompetitors,
+    isConnected
+  } = useCompetitorUpdates();
 
   const loadCompetitors = useCallback(async () => {
     setLoading(true);
-    setError(null);
+    setError("");
+
     try {
       const data = await fetchCompetitors();
       setCompetitors(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error('Failed to load competitors:', err);
-      setError(err.message || 'Failed to load competitors');
+      console.error("[Competitors] Load failed:", err);
+      setError(
+        err?.message ||
+          "Competitors data is not available right now."
+      );
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    document.title = "Web3 Intel Platform | Competitors";
     loadCompetitors();
   }, [loadCompetitors]);
 
   useEffect(() => {
-    // Update competitors with realtime data
-    if (realtimeCompetitors.length > 0) {
-      setCompetitors(prev => {
-        const updated = [...prev];
-        realtimeCompetitors.forEach(newComp => {
-          const index = updated.findIndex(c => c.id === newComp.id);
-          if (index !== -1) {
-            updated[index] = { ...updated[index], ...newComp };
-          } else {
-            updated.push(newComp);
-          }
-        });
-        return updated;
+    if (!realtimeCompetitors.length) return;
+
+    setCompetitors((prev) => {
+      const updated = [...prev];
+
+      realtimeCompetitors.forEach((incoming) => {
+        const index = updated.findIndex((item) => item.id === incoming.id);
+
+        if (index >= 0) {
+          updated[index] = { ...updated[index], ...incoming };
+        } else {
+          updated.unshift(incoming);
+        }
       });
-    }
+
+      return updated;
+    });
   }, [realtimeCompetitors]);
 
-  const StatCard = ({ title, value, icon: Icon, color, trend }) => (
-    <div style={{
-      background: 'white',
-      borderRadius: '20px',
-      padding: '24px',
-      boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-      border: '1px solid rgba(0,0,0,0.05)',
-      transition: 'all 0.3s ease',
-      cursor: 'pointer'
-    }}
-    onMouseEnter={(e) => {
-      e.currentTarget.style.transform = 'translateY(-4px)';
-      e.currentTarget.style.boxShadow = '0 20px 25px -5px rgba(0,0,0,0.1)';
-    }}
-    onMouseLeave={(e) => {
-      e.currentTarget.style.transform = 'translateY(0)';
-      e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.05)';
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
-        <div style={{
-          background: color,
-          borderRadius: '12px',
-          padding: '10px',
-          color: 'white',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
-        }}>
-          <Icon size={24} />
-        </div>
-        {trend && (
-          <div style={{
-            background: 'rgba(16, 185, 129, 0.1)',
-            borderRadius: '12px',
-            padding: '4px 8px',
-            fontSize: '12px',
-            fontWeight: '600',
-            color: '#10b981'
-          }}>
-            +{trend}%
-          </div>
-        )}
-      </div>
-      <div>
-        <div style={{ fontSize: '14px', color: '#6b7280', fontWeight: '500', marginBottom: '8px' }}>
-          {title}
-        </div>
-        <div style={{ fontSize: '32px', fontWeight: '700', color: '#111827', marginBottom: '4px' }}>
-          {typeof value === 'number' ? value.toLocaleString() : value}
-        </div>
-      </div>
-    </div>
-  );
+  const handleRetry = () => {
+    loadCompetitors();
+  };
+
+  const handleRefresh = async () => {
+    try {
+      setRefreshing(true);
+      await loadCompetitors();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const totalCompetitors = competitors.length;
+
+  const averageStrength = useMemo(() => {
+    if (!competitors.length) return "0";
+    const total = competitors.reduce(
+      (sum, item) => sum + Number(item.strengthScore || item.strength_score || 0),
+      0
+    );
+    return Math.round(total / competitors.length).toString();
+  }, [competitors]);
+
+  const averageMarketShare = useMemo(() => {
+    if (!competitors.length) return "0%";
+    const total = competitors.reduce(
+      (sum, item) => sum + Number(item.marketShare || item.market_share || 0),
+      0
+    );
+    return `${Math.round(total / competitors.length)}%`;
+  }, [competitors]);
 
   if (loading) {
     return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-      }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{
-            width: '60px',
-            height: '60px',
-            border: '4px solid rgba(255,255,255,0.3)',
-            borderTopColor: 'white',
-            borderRadius: '50%',
-            animation: 'spin 1s linear infinite',
-            marginBottom: '20px'
-          }} />
-          <p style={{ color: 'white', fontSize: '18px' }}>Loading competitors...</p>
+      <DashboardShell>
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <div className="text-center">
+            <div className="loading-spinner mx-auto" />
+            <p className="mt-4 font-medium text-slate-600">
+              Loading competitors...
+            </p>
+          </div>
         </div>
-      </div>
+      </DashboardShell>
     );
   }
 
   if (error) {
     return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-      }}>
-        <div style={{
-          background: 'white',
-          borderRadius: '20px',
-          padding: '40px',
-          textAlign: 'center',
-          maxWidth: '400px'
-        }}>
-          <FiActivity size={48} color="#ef4444" style={{ marginBottom: '20px' }} />
-          <h2 style={{ fontSize: '24px', fontWeight: '600', marginBottom: '10px', color: '#111827' }}>
-            Failed to Load Data
-          </h2>
-          <p style={{ color: '#6b7280', marginBottom: '20px' }}>{error}</p>
-          <button onClick={loadCompetitors} style={{
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            color: 'white',
-            border: 'none',
-            padding: '10px 24px',
-            borderRadius: '12px',
-            fontSize: '14px',
-            fontWeight: '600',
-            cursor: 'pointer',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}>
-            <FiRefreshCw size={16} /> Retry
-          </button>
-        </div>
-      </div>
+      <DashboardShell>
+        <ErrorState
+          error={error}
+          onRetry={handleRetry}
+          title="Competitor data unavailable"
+          message={
+            error.includes("not implemented")
+              ? "The competitors backend is not implemented yet. The page is ready for it and will work once those endpoints are added."
+              : error
+          }
+        />
+      </DashboardShell>
     );
   }
 
   return (
-    <div style={{
-      background: '#f8fafc',
-      minHeight: '100vh',
-      fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-      padding: '32px'
-    }}>
-      {/* Header */}
-      <div style={{
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        borderRadius: '24px',
-        padding: '32px',
-        marginBottom: '32px',
-        color: 'white'
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <div>
-            <h1 style={{ fontSize: '32px', fontWeight: '700', marginBottom: '8px' }}>
-              Competitor Analysis
-            </h1>
-            <p style={{ color: 'rgba(255,255,255,0.9)', fontSize: '16px' }}>
-              Track and analyze your competition in real-time
-            </p>
-          </div>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            background: 'rgba(255,255,255,0.2)',
-            padding: '8px 16px',
-            borderRadius: '12px',
-            backdropFilter: 'blur(10px)'
-          }}>
-            <div style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              background: isConnected ? '#10b981' : '#ef4444',
-              animation: isConnected ? 'pulse 2s infinite' : 'none'
-            }} />
-            <span style={{ fontSize: '12px', fontWeight: '500' }}>
-              {isConnected ? 'Live Updates Active' : 'Reconnecting...'}
-            </span>
-          </div>
-        </div>
-      </div>
+    <div className="min-h-screen bg-slate-50 xl:flex">
+      <Sidebar />
 
-      {/* Stats */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-        gap: '24px',
-        marginBottom: '32px'
-      }}>
-        <StatCard
-          title="Total Competitors"
-          value={competitors.length}
-          icon={FiUsers}
-          color="linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
-          trend={12}
-        />
-        <StatCard
-          title="Market Share"
-          value="34%"
-          icon={FiBarChart2}
-          color="linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)"
-          trend={5}
-        />
-        <StatCard
-          title="Active Alerts"
-          value="8"
-          icon={FiTrendingUp}
-          color="linear-gradient(135deg, #10b981 0%, #059669 100%)"
-        />
-      </div>
+      <div className="min-w-0 flex-1">
+        <DashboardShell>
+          <Topbar
+            connected={isConnected}
+            onRefresh={handleRefresh}
+            loading={refreshing}
+          />
 
-      {/* Competitors Grid */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))',
-        gap: '24px'
-      }}>
-        {competitors.length === 0 ? (
-          <div style={{
-            gridColumn: '1 / -1',
-            textAlign: 'center',
-            padding: '60px',
-            background: 'white',
-            borderRadius: '20px',
-            border: '1px solid rgba(0,0,0,0.05)'
-          }}>
-            <FiUsers size={48} color="#9ca3af" style={{ marginBottom: '16px' }} />
-            <p style={{ color: '#6b7280', fontSize: '16px' }}>
-              No competitors found. Add some competitors to start tracking.
-            </p>
+          <div className="mb-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            <KpiCard
+              title="Total Competitors"
+              value={totalCompetitors}
+              subtitle="Tracked entities"
+              icon={FiUsers}
+              color="from-cyan-500 to-cyan-600"
+            />
+
+            <KpiCard
+              title="Average Strength"
+              value={`${averageStrength}/100`}
+              subtitle="Competitive score"
+              icon={FiTrendingUp}
+              color="from-emerald-500 to-emerald-600"
+            />
+
+            <KpiCard
+              title="Average Market Share"
+              value={averageMarketShare}
+              subtitle="Estimated share"
+              icon={FiBarChart2}
+              color="from-blue-500 to-blue-600"
+            />
+
+            <KpiCard
+              title="Live Updates"
+              value={isConnected ? "Active" : "Offline"}
+              subtitle="Realtime stream"
+              icon={FiActivity}
+              color="from-violet-500 to-violet-600"
+            />
           </div>
-        ) : (
-          competitors.map((competitor, idx) => (
-            <div key={competitor.id || idx} style={{
-              background: 'white',
-              borderRadius: '20px',
-              padding: '24px',
-              border: '1px solid rgba(0,0,0,0.05)',
-              transition: 'all 0.3s ease'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-4px)';
-              e.currentTarget.style.boxShadow = '0 20px 25px -5px rgba(0,0,0,0.1)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = 'none';
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px' }}>
-                <div style={{
-                  width: '60px',
-                  height: '60px',
-                  borderRadius: '12px',
-                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '24px',
-                  fontWeight: '600',
-                  color: 'white'
-                }}>
-                  {competitor.name?.charAt(0) || 'C'}
-                </div>
-                <div>
-                  <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '4px', color: '#111827' }}>
-                    {competitor.name || 'Unknown Competitor'}
-                  </h3>
-                  <p style={{ fontSize: '13px', color: '#6b7280' }}>
-                    Market Share: {competitor.marketShare || 'N/A'}%
-                  </p>
-                </div>
-              </div>
-              
-              {competitor.description && (
-                <p style={{ fontSize: '14px', color: '#6b7280', marginBottom: '16px', lineHeight: '1.5' }}>
-                  {competitor.description}
+
+          <div className="mb-8 glass-card p-6">
+            <div className="mb-4 flex items-center justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-bold text-slate-900">
+                  Competitor Analysis
+                </h2>
+                <p className="text-sm text-slate-500">
+                  Track and compare competitive intelligence in a structured view
                 </p>
-              )}
-              
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                paddingTop: '16px',
-                borderTop: '1px solid #f3f4f6'
-              }}>
-                <div>
-                  <span style={{ fontSize: '12px', color: '#6b7280' }}>Strength Score</span>
-                  <div style={{ fontSize: '20px', fontWeight: '700', color: '#667eea' }}>
-                    {competitor.strengthScore || 75}/100
-                  </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 font-semibold text-slate-800 transition hover:bg-slate-50 disabled:opacity-70"
+              >
+                <FiRefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+                {refreshing ? "Refreshing..." : "Reload"}
+              </button>
+            </div>
+
+            {competitors.length === 0 ? (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-10 text-center">
+                <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-cyan-500/10">
+                  <FiUsers className="h-10 w-10 text-cyan-500" />
                 </div>
-                <button style={{
-                  padding: '8px 16px',
-                  background: '#f9fafb',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '10px',
-                  fontSize: '13px',
-                  fontWeight: '500',
-                  color: '#667eea',
-                  cursor: 'pointer'
-                }}>
-                  View Analysis
-                </button>
+                <h3 className="mb-2 text-lg font-semibold text-slate-900">
+                  No competitors available
+                </h3>
+                <p className="mx-auto max-w-xl text-slate-500">
+                  This page is ready, but no competitor data has been returned yet.
+                  Once competitor endpoints are added to the backend, records will
+                  appear here automatically.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
+                {competitors.map((competitor, idx) => {
+                  const name = competitor.name || "Unknown Competitor";
+                  const marketShare = competitor.marketShare ?? competitor.market_share ?? "N/A";
+                  const strengthScore =
+                    competitor.strengthScore ?? competitor.strength_score ?? 75;
+                  const description =
+                    competitor.description || "No description available.";
+
+                  return (
+                    <div
+                      key={competitor.id || idx}
+                      className="rounded-2xl border border-slate-200 bg-slate-50 p-6 transition-all hover:-translate-y-1 hover:border-cyan-200 hover:bg-white hover:shadow-lg"
+                    >
+                      <div className="mb-4 flex items-center gap-4">
+                        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-gradient text-xl font-bold text-white">
+                          {name.charAt(0)}
+                        </div>
+
+                        <div>
+                          <h3 className="text-lg font-bold text-slate-900">
+                            {name}
+                          </h3>
+                          <p className="text-sm text-slate-500">
+                            Market Share: {marketShare}%
+                          </p>
+                        </div>
+                      </div>
+
+                      <p className="mb-5 text-sm leading-6 text-slate-600">
+                        {description}
+                      </p>
+
+                      <div className="mb-4">
+                        <div className="mb-1 flex items-center justify-between">
+                          <span className="text-xs text-slate-500">
+                            Strength Score
+                          </span>
+                          <span className="text-sm font-bold text-cyan-600">
+                            {strengthScore}/100
+                          </span>
+                        </div>
+
+                        <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-teal-500 transition-all duration-500"
+                            style={{
+                              width: `${Math.max(
+                                0,
+                                Math.min(100, Number(strengthScore || 0))
+                              )}%`
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between border-t border-slate-200 pt-4">
+                        <div className="text-sm text-slate-500">
+                          Live tracking ready
+                        </div>
+
+                        <button
+                          type="button"
+                          className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-cyan-700 transition hover:bg-slate-50"
+                        >
+                          View Analysis
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {!isConnected && (
+            <div className="glass-card flex items-start gap-3 p-4">
+              <FiAlertCircle className="mt-0.5 h-5 w-5 text-amber-500" />
+              <div>
+                <div className="font-semibold text-slate-900">
+                  Realtime competitor updates are reconnecting
+                </div>
+                <div className="text-sm text-slate-500">
+                  The page still works, but websocket updates are not currently connected.
+                </div>
               </div>
             </div>
-          ))
-        )}
+          )}
+        </DashboardShell>
       </div>
-
-      <style>{`
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-        @keyframes pulse {
-          0% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.5; transform: scale(1.2); }
-          100% { opacity: 1; transform: scale(1); }
-        }
-      `}</style>
     </div>
   );
 };

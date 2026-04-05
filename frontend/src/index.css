@@ -1,188 +1,107 @@
-﻿/* src/index.css */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+﻿@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
-  * {
-    box-sizing: border-box;
-  }
-  
-  body {
-    @apply bg-gradient-to-br from-slate-50 via-white to-slate-100 text-slate-900 antialiased;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  }
-  
   html {
     scroll-behavior: smooth;
   }
-}
 
-/* Custom scrollbar */
-@layer utilities {
-  ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+  body {
+    @apply bg-slate-50 text-slate-900 antialiased;
+    font-family: 'Inter', sans-serif;
   }
-  
-  ::-webkit-scrollbar-track {
-    @apply bg-slate-200/50 rounded-full;
-  }
-  
-  ::-webkit-scrollbar-thumb {
-    @apply bg-gradient-to-b from-cyan-500 to-teal-500 rounded-full;
-  }
-  
-  ::-webkit-scrollbar-thumb:hover {
-    @apply from-cyan-600 to-teal-600;
-  }
-  
-  /* Firefox scrollbar */
+
   * {
-    scrollbar-width: thin;
-    scrollbar-color: #06b6d4 #e2e8f0;
+    box-sizing: border-box;
   }
 }
 
-/* Glassmorphic effect */
 @layer components {
+  .section-container {
+    @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+
+  .section-padding {
+    @apply py-16 md:py-24;
+  }
+
   .glass-card {
-    @apply bg-white/80 backdrop-blur-xl border border-white/30 rounded-2xl transition-all duration-300 shadow-md;
+    @apply rounded-3xl border border-white/40 bg-white/80 shadow-[0_10px_40px_rgba(2,6,23,0.08)] backdrop-blur-xl;
   }
-  
-  .glass-card:hover {
-    @apply border-cyan-500/50 shadow-xl;
-    transform: translateY(-2px);
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-cyan-500 to-teal-500 px-6 py-3 text-sm font-semibold text-white shadow-lg transition duration-300 hover:scale-[1.02] hover:shadow-cyan-500/30;
   }
-  
-  /* Gradient text */
-  .gradient-text {
-    @apply bg-gradient-to-r from-cyan-500 via-teal-500 to-emerald-500 bg-clip-text text-transparent;
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-white px-6 py-3 text-sm font-semibold text-slate-800 shadow-sm transition duration-300 hover:bg-slate-50;
   }
-  
-  /* Animated gradient background */
-  .animated-gradient {
-    background: linear-gradient(-45deg, #06b6d4, #0891b2, #14b8a6, #0d9488);
-    background-size: 400% 400%;
-    animation: gradient 15s ease infinite;
+
+  .status-badge {
+    @apply inline-flex items-center gap-2 rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1 text-xs font-semibold text-cyan-700;
   }
-  
-  /* Neon glow effect */
-  .neon-glow {
-    @apply shadow-lg shadow-cyan-500/30;
+
+  .hero-shell {
+    @apply relative overflow-hidden bg-slate-950;
+    background-image:
+      radial-gradient(circle at 20% 20%, rgba(34,211,238,0.20), transparent 30%),
+      radial-gradient(circle at 80% 30%, rgba(16,185,129,0.18), transparent 28%),
+      linear-gradient(135deg, #020617 0%, #0f172a 45%, #111827 100%);
   }
-  
-  /* Card hover effect */
-  .card-hover {
-    @apply transition-all duration-300;
+
+  .hero-grid {
+    background-image:
+      linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+    background-size: 36px 36px;
   }
-  
-  .card-hover:hover {
-    @apply -translate-y-1 shadow-2xl;
+
+  .hero-orb {
+    @apply absolute rounded-full blur-3xl;
   }
-  
-  /* Loading spinner */
+
+  .kpi-card {
+    @apply rounded-3xl border border-white/50 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.06)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_18px_45px_rgba(15,23,42,0.12)];
+  }
+
+  .table-shell {
+    @apply overflow-hidden rounded-3xl border border-slate-200 bg-white;
+  }
+
+  .table-wrap {
+    @apply overflow-x-auto;
+  }
+
+  .table-base {
+    @apply min-w-full border-collapse;
+  }
+
+  .table-head {
+    @apply bg-slate-50;
+  }
+
+  .table-head-cell {
+    @apply px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-500;
+  }
+
+  .table-row {
+    @apply border-t border-slate-100 hover:bg-slate-50;
+  }
+
+  .table-cell {
+    @apply px-4 py-4 text-sm text-slate-700;
+  }
+
   .loading-spinner {
-    @apply w-12 h-12 border-4 border-cyan-500/20 border-t-cyan-500 rounded-full animate-spin;
-  }
-  
-  /* Pulse dot */
-  .pulse-dot {
-    @apply relative;
-  }
-  
-  .pulse-dot::before {
-    content: '';
-    @apply absolute inset-0 rounded-full bg-cyan-500 animate-ping;
+    @apply h-12 w-12 animate-spin rounded-full border-4 border-slate-200 border-t-cyan-500;
   }
 }
 
-/* Keyframe animations */
-@keyframes gradient {
-  0% {
-    background-position: 0% 50%;
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
   }
-  50% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0% 50%;
-  }
-}
-
-@keyframes float {
-  0%, 100% {
-    transform: translateY(0px);
-  }
-  50% {
-    transform: translateY(-10px);
-  }
-}
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes slideInLeft {
-  from {
-    opacity: 0;
-    transform: translateX(-30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-@keyframes slideInRight {
-  from {
-    opacity: 0;
-    transform: translateX(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-/* Animation classes */
-.animate-float {
-  animation: float 3s ease-in-out infinite;
-}
-
-.animate-fade-in-up {
-  animation: fadeInUp 0.5s ease-out forwards;
-}
-
-.animate-slide-in-left {
-  animation: slideInLeft 0.5s ease-out forwards;
-}
-
-.animate-slide-in-right {
-  animation: slideInRight 0.5s ease-out forwards;
-}
-
-.delay-100 {
-  animation-delay: 100ms;
-}
-
-.delay-200 {
-  animation-delay: 200ms;
-}
-
-.delay-300 {
-  animation-delay: 300ms;
-}
-
-.delay-400 {
-  animation-delay: 400ms;
 }

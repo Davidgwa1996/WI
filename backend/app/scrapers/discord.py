@@ -1,45 +1,51 @@
-﻿import discord
-import asyncio
+﻿import requests
+from tenacity import retry, stop_after_attempt, wait_exponential
 from app.config import settings
-from app.websocket_manager import manager
 
-class DiscordMemberCounter(discord.Client):
-    def __init__(self, guild_id):
-        super().__init__(intents=discord.Intents.default())
-        self.guild_id = guild_id
-        self.member_count = 0
+BASE_URL = "https://discord.com/api/v10"
 
-    async def on_ready(self):
-        guild = self.get_guild(self.guild_id)
-        if guild:
-            self.member_count = guild.member_count
-        await self.close()
 
-async def fetch_member_count(guild_id):
+def _headers():
     if not settings.DISCORD_BOT_TOKEN:
-        return 0
-    bot = DiscordMemberCounter(guild_id)
-    await bot.start(settings.DISCORD_BOT_TOKEN)
-    return bot.member_count
+        return {}
+    return {
+        "Authorization": f"Bot {settings.DISCORD_BOT_TOKEN}",
+        "Content-Type": "application/json",
+    }
 
-async def update_discord_metrics_async(project, db_session):
-    if not project.discord_guild_id:
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=8))
+def get_guild(guild_id: str) -> dict:
+    url = f"{BASE_URL}/guilds/{guild_id}"
+    params = {"with_counts": "true"}
+    response = requests.get(url, headers=_headers(), params=params, timeout=20)
+    response.raise_for_status()
+    return response.json()
+
+
+def update_discord_metrics(project, db) -> None:
+    if not project.discord_guild_id or not settings.DISCORD_BOT_TOKEN:
         return
-    try:
-        count = await fetch_member_count(int(project.discord_guild_id))
-        old_members = project.discord_members
-        project.discord_members = count
-        if old_members:
-            project.discord_growth_30d = ((count - old_members) / old_members) * 100
-        db_session.commit()
-        await manager.broadcast({
-            "type": "discord_update",
-            "project_id": project.id,
-            "discord_members": count,
-            "growth": project.discord_growth_30d
-        })
-    except Exception as e:
-        print(f"Discord error for {project.name}: {e}")
 
-def update_discord_metrics(project, db_session):
-    asyncio.run(update_discord_metrics_async(project, db_session))
+    guild = get_guild(project.discord_guild_id)
+    members = int(guild.get("approximate_member_count", 0))
+    previous_members = int(project.discord_members or 0)
+
+    project.discord_members = members
+
+    if previous_members > 0:
+        growth = ((members - previous_members) / previous_members) * 100
+        project.discord_growth_30d = round(growth, 4)
+
+    project.extra_data = project.extra_data or {}
+    project.extra_data["discord"] = {
+        "id": guild.get("id"),
+        "name": guild.get("name"),
+        "description": guild.get("description"),
+        "approximate_member_count": guild.get("approximate_member_count"),
+        "approximate_presence_count": guild.get("approximate_presence_count"),
+        "premium_tier": guild.get("premium_tier"),
+        "features": guild.get("features", []),
+    }
+
+    db.add(project)

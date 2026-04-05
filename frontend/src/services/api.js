@@ -1,132 +1,132 @@
 ﻿// src/services/api.js
 
-// ✅ Use Railway backend (fallback ensures production works even without env)
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ||
-  "https://wi-production-ae1c.up.railway.app";
+const API_BASE_URL = (import.meta.env.VITE_API_URL || "/api/v1").replace(/\/+$/, "");
 
 console.log("[API] Base URL:", API_BASE_URL);
 
-// ------------------------------------------------------------
-// Response handler
-// ------------------------------------------------------------
+const buildUrl = (endpoint = "") => {
+  const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+  return `${API_BASE_URL}${cleanEndpoint}`;
+};
+
+const parseErrorResponse = async (response) => {
+  let message = `HTTP ${response.status}`;
+
+  try {
+    const data = await response.json();
+    message = data?.detail || data?.message || data?.error || message;
+  } catch {
+    // ignore parse failure
+  }
+
+  return message;
+};
+
 const handleResponse = async (response) => {
   if (!response.ok) {
-    let message = `HTTP ${response.status}`;
-
-    try {
-      const data = await response.json();
-      message = data.message || data.error || message;
-    } catch {}
-
+    const message = await parseErrorResponse(response);
     throw new Error(message);
   }
+
+  if (response.status === 204) return null;
+
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.includes("application/json")) return null;
 
   return response.json();
 };
 
-// ------------------------------------------------------------
-// Fetch wrapper (with timeout)
-// ------------------------------------------------------------
 const fetchAPI = async (endpoint, options = {}) => {
-  const url = `${API_BASE_URL}${endpoint}`;
+  const url = buildUrl(endpoint);
   console.log("[API] Request:", url);
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10000);
+  const timeout = setTimeout(() => controller.abort(), 12000);
 
   try {
-    const res = await fetch(url, {
+    const response = await fetch(url, {
+      method: options.method || "GET",
       headers: {
-        "Content-Type": "application/json",
         Accept: "application/json",
-        ...options.headers,
+        ...(options.body ? { "Content-Type": "application/json" } : {}),
+        ...(options.headers || {}),
       },
+      body: options.body,
       signal: controller.signal,
-      ...options,
     });
 
     clearTimeout(timeout);
-    return await handleResponse(res);
-  } catch (err) {
+    return await handleResponse(response);
+  } catch (error) {
     clearTimeout(timeout);
 
-    if (err.name === "AbortError") {
+    if (error.name === "AbortError") {
       throw new Error("Request timeout");
     }
 
-    console.error("[API ERROR]", endpoint, err);
-    throw err;
+    console.error("[API ERROR]", endpoint, error);
+    throw error;
   }
 };
 
-// ------------------------------------------------------------
-// PROJECTS API
-// ------------------------------------------------------------
+export const systemAPI = {
+  getHealth: () => fetchAPI("/health"),
+  getMetrics: () => fetchAPI("/metrics"),
+};
+
 export const projectsAPI = {
-  getAll: () => fetchAPI("/projects"),
+  getAll: (params = {}) => {
+    const query = new URLSearchParams();
+
+    if (params.skip !== undefined) query.set("skip", String(params.skip));
+    if (params.limit !== undefined) query.set("limit", String(params.limit));
+    if (params.stage) query.set("stage", params.stage);
+    if (params.sector) query.set("sector", params.sector);
+
+    const qs = query.toString();
+    return fetchAPI(`/projects${qs ? `?${qs}` : ""}`);
+  },
+
+  getSummary: (params = {}) => {
+    const query = new URLSearchParams();
+
+    if (params.skip !== undefined) query.set("skip", String(params.skip));
+    if (params.limit !== undefined) query.set("limit", String(params.limit));
+
+    const qs = query.toString();
+    return fetchAPI(`/projects/summary${qs ? `?${qs}` : ""}`);
+  },
+
   getById: (id) => fetchAPI(`/projects/${id}`),
 
-  create: (data) =>
-    fetchAPI("/projects", {
+  refresh: () =>
+    fetchAPI("/projects/refresh", {
       method: "POST",
-      body: JSON.stringify(data),
-    }),
-
-  update: (id, data) =>
-    fetchAPI(`/projects/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    }),
-
-  delete: (id) =>
-    fetchAPI(`/projects/${id}`, {
-      method: "DELETE",
     }),
 };
 
-// ------------------------------------------------------------
-// COMPETITORS API
-// ------------------------------------------------------------
 export const competitorsAPI = {
-  getAll: () => fetchAPI("/competitors"),
-  getById: (id) => fetchAPI(`/competitors/${id}`),
-
-  create: (data) =>
-    fetchAPI("/competitors", {
-      method: "POST",
-      body: JSON.stringify(data),
-    }),
-
-  update: (id, data) =>
-    fetchAPI(`/competitors/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    }),
-
-  delete: (id) =>
-    fetchAPI(`/competitors/${id}`, {
-      method: "DELETE",
-    }),
+  getAll: async () => [],
+  getById: async () => null,
 };
 
-// ------------------------------------------------------------
-// BACKWARD COMPATIBILITY (IMPORTANT)
-// ------------------------------------------------------------
-export const fetchProjects = async () => {
-  return await projectsAPI.getAll();
-};
+export const fetchProjects = async () => projectsAPI.getAll();
+export const fetchProjectById = async (id) => projectsAPI.getById(id);
+export const fetchProjectSummary = async () => projectsAPI.getSummary();
+export const refreshProjects = async () => projectsAPI.refresh();
+export const fetchHealth = async () => systemAPI.getHealth();
+export const fetchMetrics = async () => systemAPI.getMetrics();
+export const fetchCompetitors = async () => competitorsAPI.getAll();
 
-export const fetchCompetitors = async () => {
-  return await competitorsAPI.getAll();
-};
-
-// ------------------------------------------------------------
-// EXPORT DEFAULT
-// ------------------------------------------------------------
 export default {
+  system: systemAPI,
   projects: projectsAPI,
   competitors: competitorsAPI,
   fetchProjects,
+  fetchProjectById,
+  fetchProjectSummary,
+  refreshProjects,
+  fetchHealth,
+  fetchMetrics,
   fetchCompetitors,
 };

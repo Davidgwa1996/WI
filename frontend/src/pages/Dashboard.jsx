@@ -1,92 +1,209 @@
-﻿// src/pages/Dashboard.jsx
-import React, { useState, useEffect, useCallback } from 'react';
-import { projectsAPI } from '../services/api';
-import { 
-  FiTrendingUp, 
-  FiUsers, 
-  FiDollarSign, 
-  FiActivity, 
-  FiRefreshCw, 
-  FiPlusCircle, 
-  FiBarChart2, 
-  FiTarget, 
-  FiZap,
-  FiChevronRight,
-  FiClock,
-  FiCheckCircle,
-  FiAlertCircle
-} from 'react-icons/fi';
-import LoadingSpinner from '../components/LoadingSpinner';
-import ErrorState from '../components/ErrorState';
-import GlassCard from '../components/GlassCard';
+﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  FiBarChart2,
+  FiDollarSign,
+  FiActivity,
+  FiTrendingUp,
+  FiLayers,
+} from "react-icons/fi";
+
+import { projectsAPI, systemAPI } from "../services/api";
+import { useDashboardStream } from "../hooks/useWebSocket";
+
+import DashboardShell from "../components/dashboard/DashboardShell";
+import Sidebar from "../components/dashboard/Sidebar";
+import Topbar from "../components/dashboard/Topbar";
+import KpiCard from "../components/dashboard/KpiCard";
+import LiveChart from "../components/dashboard/LiveChart";
+import AlertsPanel from "../components/dashboard/AlertsPanel";
+import AIInsightsPanel from "../components/dashboard/AIInsightsPanel";
+import ProjectTable from "../components/dashboard/ProjectTable";
+import MetricsPanel from "../components/dashboard/MetricsPanel";
+import AIBriefingCard from "../components/dashboard/AIBriefingCard";
+import OpportunityRadar from "../components/dashboard/OpportunityRadar";
+
+import ErrorState from "../components/ErrorState";
+
+import {
+  buildDailyBriefing,
+  formatMoneyCompact,
+  getRadarBuckets,
+} from "../lib/intelligence";
 
 const Dashboard = () => {
   const [projects, setProjects] = useState([]);
+  const [metrics, setMetrics] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [retryCount, setRetryCount] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState("");
 
-  const fetchProjects = useCallback(async () => {
+  const {
+    isConnected,
+    alerts: liveAlerts,
+    insights: liveInsights,
+    projectEvents,
+  } = useDashboardStream();
+
+  const loadDashboard = useCallback(async () => {
     setLoading(true);
-    setError(null);
+    setError("");
+
     try {
-      console.log('[Dashboard] Fetching projects...');
-      const data = await projectsAPI.getAll();
-      console.log('[Dashboard] Received data:', data);
-      setProjects(Array.isArray(data) ? data : []);
+      const [projectsData, metricsData] = await Promise.all([
+        projectsAPI.getAll(),
+        systemAPI.getMetrics(),
+      ]);
+
+      setProjects(Array.isArray(projectsData) ? projectsData : []);
+      setMetrics(metricsData || null);
     } catch (err) {
-      console.error('[Dashboard] Error:', err);
-      setError(err.message || 'Failed to load projects. Please check backend connection.');
+      console.error("[Dashboard] Load failed:", err);
+      setError(err?.message || "Failed to load dashboard data.");
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchProjects();
-  }, [fetchProjects, retryCount]);
+    document.title = "Web3 Intel Platform | Dashboard";
+    loadDashboard();
+  }, [loadDashboard]);
+
+  useEffect(() => {
+    if (!projectEvents?.length) return;
+
+    const latest = projectEvents[0];
+    const payload = latest?.data;
+
+    if (!payload?.project_id) return;
+
+    setProjects((prev) => {
+      const next = [...prev];
+      const index = next.findIndex((p) => p.id === payload.project_id);
+
+      const updatedProject = {
+        ...(index >= 0 ? next[index] : {}),
+        id: payload.project_id,
+        name: payload.name || (index >= 0 ? next[index]?.name : "Unnamed Project"),
+        sector: payload.sector || (index >= 0 ? next[index]?.sector : null),
+        stage: payload.stage || (index >= 0 ? next[index]?.stage : null),
+        description:
+          payload.description ?? (index >= 0 ? next[index]?.description : ""),
+        website: payload.website ?? (index >= 0 ? next[index]?.website : ""),
+        twitter_handle:
+          payload.twitter_handle ??
+          (index >= 0 ? next[index]?.twitter_handle : ""),
+        token_symbol:
+          payload.token_symbol ?? (index >= 0 ? next[index]?.token_symbol : ""),
+        overall_score:
+          payload.overall_score ?? (index >= 0 ? next[index]?.overall_score : 0),
+        llm_score: payload.llm_score ?? (index >= 0 ? next[index]?.llm_score : 0),
+        sentiment_score:
+          payload.sentiment_score ??
+          (index >= 0 ? next[index]?.sentiment_score : 0),
+        funding_prediction:
+          payload.funding_prediction ??
+          (index >= 0 ? next[index]?.funding_prediction : 0),
+        momentum_score:
+          payload.momentum_score ??
+          (index >= 0 ? next[index]?.momentum_score : 0),
+        twitter_followers:
+          payload.twitter_followers ??
+          (index >= 0 ? next[index]?.twitter_followers : 0),
+        twitter_follower_growth_30d:
+          payload.twitter_follower_growth_30d ??
+          (index >= 0 ? next[index]?.twitter_follower_growth_30d : 0),
+        discord_members:
+          payload.discord_members ??
+          (index >= 0 ? next[index]?.discord_members : 0),
+        discord_growth_30d:
+          payload.discord_growth_30d ??
+          (index >= 0 ? next[index]?.discord_growth_30d : 0),
+        github_stars:
+          payload.github_stars ?? (index >= 0 ? next[index]?.github_stars : 0),
+        github_star_growth_30d:
+          payload.github_star_growth_30d ??
+          (index >= 0 ? next[index]?.github_star_growth_30d : 0),
+        market_cap:
+          payload.market_cap ?? (index >= 0 ? next[index]?.market_cap : 0),
+        total_volume:
+          payload.total_volume ?? (index >= 0 ? next[index]?.total_volume : 0),
+        tvl: payload.tvl ?? (index >= 0 ? next[index]?.tvl : 0),
+        updated_at:
+          payload.updated_at ?? (index >= 0 ? next[index]?.updated_at : null),
+      };
+
+      if (index >= 0) {
+        next[index] = updatedProject;
+      } else {
+        next.unshift(updatedProject);
+      }
+
+      return next;
+    });
+  }, [projectEvents]);
 
   const handleRetry = () => {
-    setRetryCount(prev => prev + 1);
+    loadDashboard();
   };
 
-  // Calculate metrics
-  const totalProjects = projects.length;
-  const activeProjects = projects.filter(p => p.status === 'active' || p.status === 'in-progress').length;
-  const completedProjects = projects.filter(p => p.status === 'completed').length;
-  const totalValue = projects.reduce((sum, p) => sum + (parseFloat(p.value) || 0), 0);
-  
-  // Get recent projects (last 3)
-  const recentProjects = [...projects].slice(0, 3);
+  const handleRefresh = async () => {
+    try {
+      setRefreshing(true);
+      setError("");
+      await projectsAPI.refresh();
+    } catch (err) {
+      console.error("[Dashboard] Refresh failed:", err);
+      setError(err?.message || "Could not trigger refresh.");
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
-  const StatCard = ({ title, value, icon: Icon, color, trend, trendValue, subtitle }) => (
-    <GlassCard className="p-6 animate-fade-in-up">
-      <div className="flex justify-between items-start mb-5">
-        <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${color} flex items-center justify-center shadow-lg`}>
-          <Icon className="w-6 h-6 text-white" />
-        </div>
-        {trend && (
-          <div className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold ${
-            trend > 0 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'
-          }`}>
-            {trend > 0 ? '↑' : '↓'} {Math.abs(trendValue)}%
-          </div>
-        )}
-      </div>
-      <div>
-        <p className="text-sm font-medium text-slate-500 mb-1">{title}</p>
-        <p className="text-3xl font-bold text-slate-900 mb-1">{value}</p>
-        {subtitle && <p className="text-xs text-slate-400">{subtitle}</p>}
-      </div>
-    </GlassCard>
+  const totalProjects = projects.length;
+
+  const highScoreProjects = useMemo(
+    () => projects.filter((p) => Number(p.overall_score || 0) >= 80).length,
+    [projects]
   );
+
+  const totalMarketCap = useMemo(
+    () => projects.reduce((sum, p) => sum + Number(p.market_cap || 0), 0),
+    [projects]
+  );
+
+  const totalTVL = useMemo(
+    () => projects.reduce((sum, p) => sum + Number(p.tvl || 0), 0),
+    [projects]
+  );
+
+  const avgScore = useMemo(() => {
+    if (!projects.length) return "0%";
+    const total = projects.reduce(
+      (sum, p) => sum + Number(p.overall_score || 0),
+      0
+    );
+    return `${Math.round(total / projects.length)}%`;
+  }, [projects]);
+
+  const radarBuckets = useMemo(() => getRadarBuckets(projects), [projects]);
+  const briefing = useMemo(() => buildDailyBriefing(projects), [projects]);
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 flex items-center justify-center">
-        <div className="text-center">
-          <LoadingSpinner size="lg" color="primary" />
-          <p className="mt-4 text-slate-600 font-medium">Loading dashboard...</p>
+      <div className="min-h-screen bg-slate-50 xl:flex">
+        <Sidebar />
+        <div className="min-w-0 flex-1">
+          <DashboardShell>
+            <div className="flex min-h-[60vh] items-center justify-center">
+              <div className="text-center">
+                <div className="loading-spinner mx-auto" />
+                <p className="mt-4 font-medium text-slate-600">
+                  Loading dashboard...
+                </p>
+              </div>
+            </div>
+          </DashboardShell>
         </div>
       </div>
     );
@@ -94,168 +211,156 @@ const Dashboard = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
-        <ErrorState error={error} onRetry={handleRetry} />
+      <div className="min-h-screen bg-slate-50 xl:flex">
+        <Sidebar />
+        <div className="min-w-0 flex-1">
+          <DashboardShell>
+            <ErrorState error={error} onRetry={handleRetry} />
+          </DashboardShell>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
-      {/* Header Section */}
-      <div className="relative overflow-hidden bg-gradient-primary pt-12 pb-20">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-white/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-0 left-0 w-96 h-96 bg-white/5 rounded-full blur-3xl" />
-        
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <div className="flex justify-between items-center flex-wrap gap-4">
-            <div className="animate-slide-in-left">
-              <h1 className="text-4xl md:text-5xl font-bold text-white mb-2">
-                Dashboard
-              </h1>
-              <p className="text-cyan-100 text-lg">
-                Welcome back! Here's your project overview
-              </p>
-            </div>
-            <button className="inline-flex items-center gap-2 px-5 py-2.5 bg-white/20 backdrop-blur-sm border border-white/30 rounded-xl text-white font-semibold hover:bg-white/30 transition-all animate-slide-in-right">
-              <FiPlusCircle className="w-5 h-5" />
-              New Project
-            </button>
-          </div>
-        </div>
-      </div>
+    <div className="min-h-screen bg-slate-50 xl:flex">
+      <Sidebar />
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-10 pb-12">
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <StatCard
-            title="Total Projects"
-            value={totalProjects}
-            icon={FiBarChart2}
-            color="from-cyan-500 to-cyan-600"
-            trend={true}
-            trendValue={12}
-            subtitle="Total in system"
-          />
-          <StatCard
-            title="Active Projects"
-            value={activeProjects}
-            icon={FiActivity}
-            color="from-blue-500 to-blue-600"
-            trend={true}
-            trendValue={8}
-            subtitle="In progress"
-          />
-          <StatCard
-            title="Completed"
-            value={completedProjects}
-            icon={FiCheckCircle}
-            color="from-emerald-500 to-emerald-600"
-            trend={true}
-            trendValue={15}
-            subtitle="Delivered"
-          />
-          <StatCard
-            title="Total Value"
-            value={`$${totalValue.toLocaleString()}`}
-            icon={FiDollarSign}
-            color="from-amber-500 to-amber-600"
-            subtitle="Portfolio value"
-          />
-        </div>
-
-        {/* Recent Projects Section */}
-        <GlassCard className="p-6 md:p-8">
-          <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
-            <div>
-              <h2 className="text-2xl font-bold text-slate-900 mb-1">
-                Recent Projects
-              </h2>
-              <p className="text-slate-500 text-sm">
-                Your latest project updates and activities
-              </p>
-            </div>
-            <button className="inline-flex items-center gap-2 text-cyan-600 font-semibold hover:text-cyan-700 transition-colors">
-              View All Projects <FiChevronRight className="w-4 h-4" />
-            </button>
+      <div className="min-w-0 flex-1">
+        <DashboardShell>
+          <div id="overview">
+            <Topbar
+              connected={isConnected}
+              onRefresh={handleRefresh}
+              loading={refreshing}
+            />
           </div>
-          
-          {projects.length === 0 ? (
-            <div className="text-center py-16">
-              <div className="w-20 h-20 mx-auto mb-4 bg-cyan-500/10 rounded-full flex items-center justify-center">
-                <FiZap className="w-10 h-10 text-cyan-500" />
+
+          <div className="mb-8">
+            <AIBriefingCard briefing={briefing} />
+          </div>
+
+          <div className="mb-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            <KpiCard
+              title="Tracked Projects"
+              value={totalProjects}
+              subtitle="Total intelligence coverage"
+              icon={FiLayers}
+              color="from-cyan-500 to-cyan-600"
+            />
+
+            <KpiCard
+              title="High Score Projects"
+              value={highScoreProjects}
+              subtitle="Score 80 and above"
+              icon={FiTrendingUp}
+              color="from-emerald-500 to-emerald-600"
+            />
+
+            <KpiCard
+              title="Combined Market Cap"
+              value={formatMoneyCompact(totalMarketCap)}
+              subtitle="Tracked market value"
+              icon={FiDollarSign}
+              color="from-amber-500 to-amber-600"
+            />
+
+            <KpiCard
+              title="Combined TVL"
+              value={formatMoneyCompact(totalTVL)}
+              subtitle="Total value locked"
+              icon={FiActivity}
+              color="from-violet-500 to-violet-600"
+            />
+          </div>
+
+          <div className="mb-8">
+            <div className="mb-4 flex items-center justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-bold text-slate-900">
+                  Opportunity Radar
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Classify tracked projects into emerging, watchlist, and
+                  high-conviction buckets.
+                </p>
               </div>
-              <h3 className="text-lg font-semibold text-slate-900 mb-2">
-                No Projects Yet
-              </h3>
-              <p className="text-slate-500 mb-6">
-                Get started by creating your first project
-              </p>
-              <button className="inline-flex items-center gap-2 px-6 py-2.5 bg-gradient-primary text-white rounded-xl font-semibold hover:shadow-lg hover:shadow-cyan-500/30 transition-all">
-                <FiPlusCircle className="w-4 h-4" />
-                Create Project
-              </button>
             </div>
-          ) : (
-            <div className="space-y-4">
-              {recentProjects.map((project, idx) => (
-                <div
-                  key={project.id || idx}
-                  className="group p-5 bg-slate-50 rounded-xl border border-slate-200 hover:bg-white hover:border-cyan-200 hover:shadow-lg transition-all cursor-pointer"
-                >
-                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2 flex-wrap">
-                        <h3 className="text-lg font-bold text-slate-900">
-                          {project.name || project.title || 'Untitled Project'}
-                        </h3>
-                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                          project.status === 'active' 
-                            ? 'bg-emerald-500/10 text-emerald-600' 
-                            : 'bg-blue-500/10 text-blue-600'
-                        }`}>
-                          {project.status || 'Active'}
-                        </span>
-                      </div>
-                      <p className="text-slate-600 text-sm mb-3 line-clamp-2">
-                        {project.description || 'No description provided'}
-                      </p>
-                      <div className="flex items-center gap-4 text-sm">
-                        {project.value && (
-                          <div className="flex items-center gap-1">
-                            <FiDollarSign className="w-4 h-4 text-slate-400" />
-                            <span className="font-semibold text-slate-700">
-                              ${parseFloat(project.value).toLocaleString()}
-                            </span>
-                          </div>
-                        )}
-                        <div className="flex items-center gap-1">
-                          <FiClock className="w-4 h-4 text-slate-400" />
-                          <span className="text-slate-500">Updated recently</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="min-w-[120px]">
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="text-xs text-slate-500">Progress</span>
-                        <span className="text-sm font-bold text-cyan-600">
-                          {project.progress || 65}%
-                        </span>
-                      </div>
-                      <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-gradient-to-r from-cyan-500 to-teal-500 rounded-full transition-all duration-500"
-                          style={{ width: `${project.progress || 65}%` }}
-                        />
-                      </div>
-                    </div>
+
+            <OpportunityRadar buckets={radarBuckets} />
+          </div>
+
+          <div className="mb-8">
+            <LiveChart data={projects} />
+          </div>
+
+          <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <AlertsPanel alerts={liveAlerts} />
+            <AIInsightsPanel insights={liveInsights} />
+          </div>
+
+          <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <div className="glass-card p-6">
+              <h2 className="mb-4 text-xl font-bold text-slate-900">
+                Platform Summary
+              </h2>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="text-sm text-slate-500">Average Score</div>
+                  <div className="mt-1 text-3xl font-extrabold text-slate-900">
+                    {avgScore}
                   </div>
                 </div>
-              ))}
+
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="text-sm text-slate-500">AI Insights</div>
+                  <div className="mt-1 text-3xl font-extrabold text-slate-900">
+                    {liveInsights.length}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="text-sm text-slate-500">Live Alerts</div>
+                  <div className="mt-1 text-3xl font-extrabold text-slate-900">
+                    {liveAlerts.length}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="text-sm text-slate-500">
+                    WebSocket Connections
+                  </div>
+                  <div className="mt-1 text-3xl font-extrabold text-slate-900">
+                    {metrics?.websocket_connections ?? 0}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="text-sm text-slate-500">Projects Tracked</div>
+                  <div className="mt-1 text-3xl font-extrabold text-slate-900">
+                    {totalProjects}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="text-sm text-slate-500">Connection Status</div>
+                  <div className="mt-1 text-lg font-bold text-slate-900">
+                    {isConnected ? "Live Connected" : "Reconnecting"}
+                  </div>
+                </div>
+              </div>
             </div>
-          )}
-        </GlassCard>
+
+            <MetricsPanel metrics={metrics || {}} />
+          </div>
+
+          <div className="mb-8" id="projects">
+            <ProjectTable projects={projects} />
+          </div>
+        </DashboardShell>
       </div>
     </div>
   );

@@ -1,68 +1,259 @@
-from celery import Celery
+from datetime import datetime
+import asyncio
+
+from app.tasks.celery_app import celery
+from app.config import settings
 from app.database import SessionLocal
 from app.models import Project
-from app.scrapers import (
-    twitter, github, discord, coingecko, defillama,
-    angellist, crunchbase, producthunt
-)
-from app.ai import llm_analyzer, sentiment, momentum, funding_predictor, ensemble
-from app.analytics import (
-    monte_carlo_funding_probability,
-    detect_growth_spike,
-    calculate_correlation,
-    sentiment_momentum
-)
-import asyncio
-from app.websocket_manager import manager   # <-- changed import
 
-celery = Celery('tasks', broker='redis://redis:6379/0')
+# ------------------------------------------------------------
+# Optional imports with safe fallback
+# ------------------------------------------------------------
+twitter = github = discord = coingecko = defillama = None
 
-@celery.task
+llm_analyzer = sentiment = momentum = funding_predictor = ensemble = None
+
+monte_carlo_funding_probability = None
+detect_growth_spike = None
+calculate_correlation = None
+sentiment_momentum = None
+
+publish_event = None
+
+try:
+    from app.scrapers import twitter, github, discord, coingecko, defillama
+except Exception as e:
+    print(f"Warning: scraper modules not available: {e}")
+
+try:
+    from app.ai import llm_analyzer, sentiment, momentum, funding_predictor, ensemble
+except Exception as e:
+    print(f"Warning: AI modules not available: {e}")
+
+try:
+    from app.analytics import (
+        monte_carlo_funding_probability,
+        detect_growth_spike,
+        calculate_correlation,
+        sentiment_momentum
+    )
+except Exception as e:
+    print(f"Warning: analytics modules not available: {e}")
+
+try:
+    from app.utils.pubsub import publish_event
+except Exception as e:
+    print(f"Warning: pubsub module not available: {e}")
+
+
+# ------------------------------------------------------------
+# Safe helpers
+# ------------------------------------------------------------
+def _safe_call(func, default=None, *args, **kwargs):
+    try:
+        return func(*args, **kwargs)
+    except Exception as e:
+        print(f"Warning: {getattr(func, '__name__', 'call')} failed: {e}")
+        return default
+
+
+def _ensure_dict(value):
+    return value if isinstance(value, dict) else {}
+
+
+# ------------------------------------------------------------
+# Main Celery task
+# ------------------------------------------------------------
+@celery.task(name="app.tasks.scraper_tasks.update_all_projects")
 def update_all_projects():
+    if SessionLocal is None:
+        return {
+            "status": "failed",
+            "reason": "Database session is not available"
+        }
+
     db = SessionLocal()
-    projects = db.query(Project).all()
-    for project in projects:
-        # Update scraped metrics
-        twitter.update_twitter_metrics(project, db)
-        github.update_github_metrics(project, db)
-        discord.update_discord_metrics(project, db)
-        coingecko.update_market_data(project, db)
-        defillama.update_defillama_tvl(project, db)
 
-        # AI scores
-        project.llm_score = llm_analyzer.llm_early_stage_score(project)
-        project.sentiment_score = sentiment.get_sentiment_score(project.id)
-        project.momentum_score = momentum.calculate_momentum_score(project)
-        project.funding_prediction = funding_predictor.predict_funding(project)
-        project.overall_score = ensemble.overall_score(project)
+    try:
+        projects = db.query(Project).all()
+        updated_count = 0
 
-        # Advanced analytics
-        monte_carlo = monte_carlo_funding_probability(project)
-        anomaly = detect_growth_spike(project)
-        # sentiment_trend = sentiment_momentum(project.id)  # optional
-        # correlation = asyncio.run(fetch_and_calc_correlation(project))  # optional
+        for project in projects:
+            try:
+                # ------------------------------------------------------------
+                # Update scraped metrics from supported sources only
+                # ------------------------------------------------------------
+                if twitter and hasattr(twitter, "update_twitter_metrics"):
+                    _safe_call(twitter.update_twitter_metrics, None, project, db)
 
-        # Store in extra_data
-        project.extra_data['monte_carlo_prob'] = monte_carlo
-        project.extra_data['anomaly_detected'] = anomaly
+                if github and hasattr(github, "update_github_metrics"):
+                    _safe_call(github.update_github_metrics, None, project, db)
 
-        db.commit()
+                if discord and hasattr(discord, "update_discord_metrics"):
+                    _safe_call(discord.update_discord_metrics, None, project, db)
 
-        # Broadcast comprehensive update
-        loop = asyncio.new_event_loop()
-        loop.run_until_complete(manager.broadcast({
-            "type": "full_update",
-            "project_id": project.id,
-            "overall_score": project.overall_score,
-            "llm_score": project.llm_score,
-            "sentiment_score": project.sentiment_score,
-            "funding_prediction": project.funding_prediction,
-            "momentum_score": project.momentum_score,
-            "twitter_followers": project.twitter_followers,
-            "github_stars": project.github_stars,
-            "discord_members": project.discord_members,
-            "market_cap": project.market_cap,
-            "monte_carlo_prob": monte_carlo,
-            "anomaly_detected": anomaly
-        }))
-    db.close()
+                if coingecko and hasattr(coingecko, "update_market_data"):
+                    _safe_call(coingecko.update_market_data, None, project, db)
+
+                if defillama and hasattr(defillama, "update_defillama_tvl"):
+                    _safe_call(defillama.update_defillama_tvl, None, project, db)
+
+                # ------------------------------------------------------------
+                # AI scores
+                # ------------------------------------------------------------
+                if llm_analyzer and hasattr(llm_analyzer, "llm_early_stage_score"):
+                    project.llm_score = _safe_call(
+                        llm_analyzer.llm_early_stage_score,
+                        project.llm_score,
+                        project
+                    )
+
+                if sentiment and hasattr(sentiment, "get_sentiment_score"):
+                    project.sentiment_score = _safe_call(
+                        sentiment.get_sentiment_score,
+                        project.sentiment_score,
+                        project.id
+                    )
+
+                if momentum and hasattr(momentum, "calculate_momentum_score"):
+                    project.momentum_score = _safe_call(
+                        momentum.calculate_momentum_score,
+                        project.momentum_score,
+                        project
+                    )
+
+                if funding_predictor and hasattr(funding_predictor, "predict_funding"):
+                    project.funding_prediction = _safe_call(
+                        funding_predictor.predict_funding,
+                        project.funding_prediction,
+                        project
+                    )
+
+                if ensemble and hasattr(ensemble, "overall_score"):
+                    project.overall_score = _safe_call(
+                        ensemble.overall_score,
+                        project.overall_score,
+                        project
+                    )
+
+                # ------------------------------------------------------------
+                # Advanced analytics
+                # ------------------------------------------------------------
+                monte_carlo_prob = None
+                anomaly_detected = None
+                correlation_value = None
+                sentiment_trend = None
+
+                if monte_carlo_funding_probability:
+                    monte_carlo_prob = _safe_call(
+                        monte_carlo_funding_probability,
+                        None,
+                        project
+                    )
+
+                if detect_growth_spike:
+                    anomaly_detected = _safe_call(
+                        detect_growth_spike,
+                        None,
+                        project
+                    )
+
+                if calculate_correlation:
+                    correlation_value = _safe_call(
+                        calculate_correlation,
+                        None,
+                        project
+                    )
+
+                if sentiment_momentum:
+                    sentiment_trend = _safe_call(
+                        sentiment_momentum,
+                        None,
+                        project.id
+                    )
+
+                # ------------------------------------------------------------
+                # Store analytics in extra_data safely
+                # ------------------------------------------------------------
+                project.extra_data = _ensure_dict(project.extra_data)
+                project.extra_data["monte_carlo_prob"] = monte_carlo_prob
+                project.extra_data["anomaly_detected"] = anomaly_detected
+                project.extra_data["correlation"] = correlation_value
+                project.extra_data["sentiment_trend"] = sentiment_trend
+
+                # Optional model fields if present
+                if hasattr(project, "anomaly_score") and anomaly_detected is not None:
+                    project.anomaly_score = 1.0 if anomaly_detected else 0.0
+
+                if hasattr(project, "last_scraped_at"):
+                    project.last_scraped_at = datetime.utcnow()
+
+                if hasattr(project, "last_ai_scored_at"):
+                    project.last_ai_scored_at = datetime.utcnow()
+
+                project.updated_at = datetime.utcnow()
+
+                db.add(project)
+                db.commit()
+                db.refresh(project)
+
+                updated_count += 1
+
+                # ------------------------------------------------------------
+                # Publish real-time event through Redis pub/sub
+                # ------------------------------------------------------------
+                if publish_event and settings.ENABLE_REDIS:
+                    try:
+                        asyncio.run(
+                            publish_event({
+                                "type": "full_update",
+                                "message": f"Project {project.name} updated",
+                                "data": {
+                                    "project_id": project.id,
+                                    "name": project.name,
+                                    "sector": project.sector,
+                                    "stage": project.stage,
+                                    "overall_score": project.overall_score,
+                                    "llm_score": project.llm_score,
+                                    "sentiment_score": project.sentiment_score,
+                                    "funding_prediction": project.funding_prediction,
+                                    "momentum_score": project.momentum_score,
+                                    "twitter_followers": project.twitter_followers,
+                                    "twitter_follower_growth_30d": project.twitter_follower_growth_30d,
+                                    "github_stars": project.github_stars,
+                                    "github_star_growth_30d": project.github_star_growth_30d,
+                                    "discord_members": project.discord_members,
+                                    "discord_growth_30d": project.discord_growth_30d,
+                                    "market_cap": project.market_cap,
+                                    "total_volume": project.total_volume,
+                                    "tvl": project.tvl,
+                                    "monte_carlo_prob": monte_carlo_prob,
+                                    "anomaly_detected": anomaly_detected,
+                                    "correlation": correlation_value,
+                                    "sentiment_trend": sentiment_trend,
+                                    "updated_at": project.updated_at.isoformat()
+                                }
+                            })
+                        )
+                    except Exception as e:
+                        print(f"Warning: realtime publish failed for project {project.id}: {e}")
+
+            except Exception as e:
+                db.rollback()
+                print(f"Error updating project {getattr(project, 'id', 'unknown')}: {e}")
+
+        return {
+            "status": "success",
+            "updated_count": updated_count
+        }
+
+    except Exception as e:
+        db.rollback()
+        print(f"Error running update_all_projects: {e}")
+        return {
+            "status": "failed",
+            "reason": str(e)
+        }
+
+    finally:
+        db.close()
