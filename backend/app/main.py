@@ -1,15 +1,17 @@
-﻿from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session
+﻿from __future__ import annotations
+
 import asyncio
 import time
 
-from app.config import settings
+from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
+
 from app import models, schemas
+from app.config import settings
 from app.database import get_db, init_db
 from app.websocket_manager import manager
 
-# Optional realtime/background imports
 listen_to_events = None
 detect_anomalies = None
 update_all_projects = None
@@ -29,31 +31,57 @@ try:
 except Exception as e:
     print(f"WARNING: Celery scraper task not available: {e}")
 
-
-# ------------------------------------------------------------
-# FastAPI app
-# ------------------------------------------------------------
-app = FastAPI(
-    title=settings.APP_NAME,
-    debug=settings.DEBUG
+from app.routes import (
+    auth_router,
+    users_router,
+    organizations_router,
+    api_keys_router,
+    subscriptions_router,
+    audit_logs_router,
+    invites_router,
+    workspace_router,
+    billing_router,
+    watchlists_router,
+    reports_router,
+    briefings_router,
+    search_router,
+    exports_router,
+    agent_router,
 )
 
+app = FastAPI(
+    title=settings.APP_NAME,
+    debug=settings.DEBUG,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url=f"{settings.API_PREFIX}/openapi.json",
+)
 
-# ------------------------------------------------------------
-# CORS
-# ------------------------------------------------------------
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.FRONTEND_ORIGINS,
-    allow_credentials=False,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+app.include_router(auth_router, prefix=settings.API_PREFIX)
+app.include_router(users_router, prefix=settings.API_PREFIX)
+app.include_router(organizations_router, prefix=settings.API_PREFIX)
+app.include_router(api_keys_router, prefix=settings.API_PREFIX)
+app.include_router(subscriptions_router, prefix=settings.API_PREFIX)
+app.include_router(audit_logs_router, prefix=settings.API_PREFIX)
+app.include_router(invites_router, prefix=settings.API_PREFIX)
+app.include_router(workspace_router, prefix=settings.API_PREFIX)
+app.include_router(billing_router, prefix=settings.API_PREFIX)
+app.include_router(watchlists_router, prefix=settings.API_PREFIX)
+app.include_router(reports_router, prefix=settings.API_PREFIX)
+app.include_router(briefings_router, prefix=settings.API_PREFIX)
+app.include_router(search_router, prefix=settings.API_PREFIX)
+app.include_router(exports_router, prefix=settings.API_PREFIX)
+app.include_router(agent_router, prefix=settings.API_PREFIX)
 
-# ------------------------------------------------------------
-# Root / Health
-# ------------------------------------------------------------
+
 @app.get("/")
 def root():
     return {
@@ -74,9 +102,6 @@ def health():
     )
 
 
-# ------------------------------------------------------------
-# Projects endpoints
-# ------------------------------------------------------------
 @app.get(f"{settings.API_PREFIX}/projects", response_model=list[schemas.ProjectOut])
 def get_projects(
     skip: int = 0,
@@ -99,10 +124,7 @@ def get_projects(
     return query.offset(skip).limit(limit).all()
 
 
-@app.get(
-    f"{settings.API_PREFIX}/projects/summary",
-    response_model=list[schemas.ProjectListItem]
-)
+@app.get(f"{settings.API_PREFIX}/projects/summary", response_model=list[schemas.ProjectListItem])
 def get_project_summaries(
     skip: int = 0,
     limit: int = 100,
@@ -127,9 +149,6 @@ def get_project(project_id: int, db: Session = Depends(get_db)):
     return project
 
 
-# ------------------------------------------------------------
-# Realtime refresh trigger
-# ------------------------------------------------------------
 @app.post(f"{settings.API_PREFIX}/projects/refresh", response_model=schemas.ApiMessage)
 def refresh_projects():
     if update_all_projects is None:
@@ -142,18 +161,15 @@ def refresh_projects():
         raise HTTPException(status_code=500, detail=f"Could not start refresh task: {e}")
 
 
-# ------------------------------------------------------------
-# Metrics / status endpoint
-# ------------------------------------------------------------
 @app.get(f"{settings.API_PREFIX}/metrics")
 def metrics(db: Session = Depends(get_db)):
     total_projects = 0
 
     if db is not None:
-        try:
-            total_projects = db.query(models.Project).count()
-        except Exception as e:
-            print(f"WARNING: Could not count projects: {e}")
+      try:
+          total_projects = db.query(models.Project).count()
+      except Exception as e:
+          print(f"WARNING: Could not count projects: {e}")
 
     return {
         "app_name": settings.APP_NAME,
@@ -167,9 +183,6 @@ def metrics(db: Session = Depends(get_db)):
     }
 
 
-# ------------------------------------------------------------
-# WebSocket endpoint
-# ------------------------------------------------------------
 @app.websocket(settings.WS_PATH)
 async def websocket_endpoint(websocket: WebSocket):
     if not settings.ENABLE_WEBSOCKETS:
@@ -181,21 +194,15 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         while True:
             data = await websocket.receive_text()
-
             if data == "ping":
                 await manager.send_personal_message({"type": "pong"}, websocket)
-
     except WebSocketDisconnect:
         manager.disconnect(websocket)
-
     except Exception as e:
         print(f"WebSocket error: {e}")
         manager.disconnect(websocket)
 
 
-# ------------------------------------------------------------
-# Startup
-# ------------------------------------------------------------
 @app.on_event("startup")
 async def startup_event():
     try:
@@ -219,9 +226,6 @@ async def startup_event():
             print(f"WARNING: Could not start anomaly stream: {e}")
 
 
-# ------------------------------------------------------------
-# Local run support
-# ------------------------------------------------------------
 if __name__ == "__main__":
     import uvicorn
 

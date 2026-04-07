@@ -5,7 +5,12 @@ celery = Celery(
     "web3intel_tasks",
     broker=settings.REDIS_URL,
     backend=settings.REDIS_URL,
-    include=["app.tasks.scraper_tasks"],
+    include=[
+        "app.tasks.scraper_tasks",
+        "app.tasks.ai_tasks",
+        "app.tasks.briefing_tasks",
+        "app.tasks.change_detection_tasks",
+    ],
 )
 
 celery.conf.update(
@@ -15,4 +20,6 @@ celery.conf.update(
     timezone="UTC",
     enable_utc=True,
     broker_connection_retry_on_startup=True,
+    worker_prefetch_multiplier=1,
+    task_acks_late=True,
 )

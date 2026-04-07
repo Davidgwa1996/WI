@@ -1,4 +1,11 @@
--r requirements.txt
-transformers==4.44.2
-torch==2.4.0
-sentence-transformers==3.0.1
+openai
+pandas
+scikit-learn
+joblib
+transformers
+torch
+sentence-transformers
+textblob
+vaderSentiment
+pymongo
+motor

@@ -2,136 +2,135 @@ import React from "react";
 import { Link } from "react-router-dom";
 import {
   FiArrowRight,
-  FiActivity,
-  FiTrendingUp,
+  FiShield,
   FiZap,
   FiBarChart2,
-  FiGlobe,
+  FiTrendingUp,
 } from "react-icons/fi";
+
+const FeatureCard = ({ icon: Icon, title, text }) => (
+  <div className="glass-card p-6">
+    <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-gradient shadow-lg shadow-cyan-500/20">
+      <Icon className="h-6 w-6 text-white" />
+    </div>
+    <h3 className="mb-2 text-xl font-bold text-slate-900">{title}</h3>
+    <p className="text-slate-600">{text}</p>
+  </div>
+);
 
 const Landing = () => {
   return (
-    <div className="min-h-screen bg-slate-50">
-      <section className="hero-shell hero-grid">
-        <div className="hero-orb left-[-80px] top-16 h-64 w-64 bg-cyan-500/20" />
-        <div className="hero-orb right-[-40px] top-24 h-72 w-72 bg-emerald-500/20" />
-        <div className="hero-orb bottom-[-80px] left-1/3 h-72 w-72 bg-violet-500/10" />
-
-        <div className="section-container section-padding relative z-10">
-          <div className="grid items-center gap-14 lg:grid-cols-2">
+    <div className="min-h-screen bg-slate-50 text-slate-900">
+      <section className="relative overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(6,182,212,0.15),_transparent_25%),radial-gradient(circle_at_bottom_left,_rgba(20,184,166,0.12),_transparent_25%)]" />
+        <div className="relative mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
+          <div className="grid items-center gap-12 lg:grid-cols-2">
             <div>
-              <div className="mb-5 status-badge bg-white/10 text-cyan-200 border-white/10">
-                <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                Real-time AI intelligence for modern Web3 workflows
+              <div className="mb-4 inline-flex rounded-full border border-cyan-200 bg-cyan-50 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-700">
+                Enterprise AI Intelligence
               </div>
 
-              <h1 className="text-balance mb-6 text-5xl font-black leading-tight text-white md:text-6xl xl:text-7xl">
-                Web3 Intel Platform
+              <h1 className="text-5xl font-black tracking-tight text-slate-900 md:text-6xl">
+                Real-time Web3 intelligence built for serious decision-making
               </h1>
 
-              <p className="mb-8 max-w-2xl text-lg leading-8 text-slate-300 md:text-xl">
-                Monitor Web3 projects, track market and community momentum,
-                detect anomalies, and surface AI-driven intelligence from one
-                premium control center.
+              <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-600">
+                Track projects, score conviction, detect risk, monitor momentum,
+                and turn fragmented Web3 signals into structured intelligence for
+                teams, analysts, and global organizations.
               </p>
 
-              <div className="flex flex-wrap gap-4">
-                <Link to="/dashboard" className="btn-primary">
-                  Open Dashboard
-                  <FiArrowRight className="h-4 w-4" />
+              <div className="mt-8 flex flex-col gap-4 sm:flex-row">
+                <Link
+                  to="/register"
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-brand-gradient px-6 py-4 font-semibold text-white shadow-lg shadow-cyan-500/20 transition hover:opacity-95"
+                >
+                  Launch Workspace
+                  <FiArrowRight className="h-5 w-5" />
                 </Link>
 
-                <Link to="/projects" className="btn-secondary">
-                  View Projects
+                <Link
+                  to="/login"
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-white px-6 py-4 font-semibold text-slate-800 transition hover:bg-slate-50"
+                >
+                  Sign In
                 </Link>
               </div>
 
-              <div className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <div className="mt-8 grid gap-4 sm:grid-cols-3">
+                <div className="rounded-2xl border border-slate-200 bg-white/80 p-4 backdrop-blur">
+                  <div className="text-2xl font-black text-slate-900">AI</div>
+                  <div className="mt-1 text-sm text-slate-500">Decision support</div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white/80 p-4 backdrop-blur">
+                  <div className="text-2xl font-black text-slate-900">Live</div>
+                  <div className="mt-1 text-sm text-slate-500">Realtime tracking</div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white/80 p-4 backdrop-blur">
+                  <div className="text-2xl font-black text-slate-900">B2B</div>
+                  <div className="mt-1 text-sm text-slate-500">Enterprise-ready</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="glass-card p-8">
+              <div className="mb-6 flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-semibold text-cyan-700">
+                    Opportunity Radar
+                  </div>
+                  <div className="text-2xl font-black text-slate-900">
+                    Live Intelligence Snapshot
+                  </div>
+                </div>
+                <div className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+                  Live
+                </div>
+              </div>
+
+              <div className="space-y-4">
                 {[
-                  { label: "Signals", value: "Real-time" },
-                  { label: "AI Scoring", value: "Automated" },
-                  { label: "Streaming", value: "WebSocket" },
-                  { label: "Stack", value: "FastAPI + React" },
+                  {
+                    name: "Project Atlas",
+                    score: "92%",
+                    tag: "High Conviction",
+                  },
+                  {
+                    name: "ChainNova",
+                    score: "81%",
+                    tag: "Watchlist",
+                  },
+                  {
+                    name: "DefiPulseX",
+                    score: "67%",
+                    tag: "Emerging",
+                  },
                 ].map((item) => (
                   <div
-                    key={item.label}
-                    className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm"
+                    key={item.name}
+                    className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
                   >
-                    <div className="text-xs uppercase tracking-wide text-slate-400">
-                      {item.label}
-                    </div>
-                    <div className="mt-2 text-sm font-bold text-white">
-                      {item.value}
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="font-bold text-slate-900">{item.name}</div>
+                        <div className="mt-1 text-sm text-slate-500">{item.tag}</div>
+                      </div>
+                      <div className="text-xl font-black text-cyan-700">
+                        {item.score}
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
-            </div>
 
-            <div className="relative">
-              <div className="glass-card overflow-hidden p-6 bg-white/10 border-white/10 backdrop-blur-2xl">
-                <div className="mb-6 flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-cyan-200">
-                      Live Intelligence Preview
-                    </p>
-                    <h3 className="mt-1 text-2xl font-bold text-white">
-                      Market + Community + AI
-                    </h3>
-                  </div>
-                  <div className="rounded-full bg-emerald-400/20 px-3 py-1 text-xs font-semibold text-emerald-300">
-                    Live
-                  </div>
+              <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                <div className="text-sm font-semibold text-slate-500">
+                  AI briefing
                 </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {[
-                    {
-                      icon: FiActivity,
-                      title: "Momentum Signals",
-                      value: "92%",
-                    },
-                    {
-                      icon: FiTrendingUp,
-                      title: "Funding Potential",
-                      value: "High",
-                    },
-                    {
-                      icon: FiBarChart2,
-                      title: "Project Health",
-                      value: "Stable",
-                    },
-                    {
-                      icon: FiGlobe,
-                      title: "Community Reach",
-                      value: "Growing",
-                    },
-                  ].map((item) => {
-                    const Icon = item.icon;
-                    return (
-                      <div
-                        key={item.title}
-                        className="rounded-2xl border border-white/10 bg-white/5 p-5"
-                      >
-                        <Icon className="mb-3 h-5 w-5 text-cyan-300" />
-                        <div className="text-sm text-slate-300">{item.title}</div>
-                        <div className="mt-2 text-2xl font-bold text-white">
-                          {item.value}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div className="mt-6 rounded-2xl border border-white/10 bg-slate-950/40 p-5">
-                  <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-cyan-200">
-                    <FiZap className="h-4 w-4" />
-                    AI Insight
-                  </div>
-                  <p className="text-sm leading-7 text-slate-300">
-                    “Projects with rising GitHub velocity and stable TVL show the
-                    strongest early-stage upside in the current market snapshot.”
-                  </p>
+                <div className="mt-2 text-sm leading-7 text-slate-600">
+                  Developer activity is strengthening across tracked projects,
+                  while only a smaller segment is showing strong multi-signal
+                  conviction. This helps teams filter hype from real traction.
                 </div>
               </div>
             </div>
@@ -139,49 +138,38 @@ const Landing = () => {
         </div>
       </section>
 
-      <section className="section-container section-padding">
-        <div className="mb-10">
-          <div className="status-badge mb-4">Platform Overview</div>
-          <h2 className="mb-3 text-4xl font-bold text-slate-900">
-            Designed like a serious intelligence product
+      <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+        <div className="mb-10 text-center">
+          <h2 className="text-4xl font-black tracking-tight text-slate-900">
+            Built for modern intelligence teams
           </h2>
-          <p className="max-w-3xl text-slate-600">
-            Built for modern analysts, researchers, founders, and teams who need
-            a cleaner way to observe Web3 project quality and momentum.
+          <p className="mx-auto mt-3 max-w-2xl text-slate-500">
+            From project discovery to risk monitoring, every workflow is designed
+            for clarity, speed, and enterprise adoption.
           </p>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-3">
-          {[
-            {
-              icon: FiActivity,
-              title: "Live Data Signals",
-              text: "Follow project movement, community activity, and core market changes in realtime.",
-            },
-            {
-              icon: FiTrendingUp,
-              title: "AI-Driven Scoring",
-              text: "Bring sentiment, funding probability, and momentum into one clear decision layer.",
-            },
-            {
-              icon: FiZap,
-              title: "Realtime Alerts",
-              text: "Surface anomalies, spikes, and meaningful updates before they become obvious.",
-            },
-          ].map((item) => {
-            const Icon = item.icon;
-            return (
-              <div key={item.title} className="glass-card p-6">
-                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500 to-teal-500">
-                  <Icon className="h-6 w-6 text-white" />
-                </div>
-                <h3 className="mb-2 text-xl font-bold text-slate-900">
-                  {item.title}
-                </h3>
-                <p className="text-slate-600">{item.text}</p>
-              </div>
-            );
-          })}
+        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+          <FeatureCard
+            icon={FiShield}
+            title="Secure workspaces"
+            text="Role-based access, API keys, audit logs, and organization-level control."
+          />
+          <FeatureCard
+            icon={FiZap}
+            title="Live signals"
+            text="Track project changes, community metrics, and market movement in real time."
+          />
+          <FeatureCard
+            icon={FiBarChart2}
+            title="Structured intelligence"
+            text="Turn raw signals into conviction, risk flags, and actionable insights."
+          />
+          <FeatureCard
+            icon={FiTrendingUp}
+            title="Business-ready reporting"
+            text="Support teams, clients, and decision-makers with organized intelligence outputs."
+          />
         </div>
       </section>
     </div>
