@@ -13,6 +13,8 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 def validate_strong_password(value: str) -> str:
     if len(value) < 8:
         raise ValueError("Password must be at least 8 characters long.")
+    if len(value) > 128:
+        raise ValueError("Password must not be more than 128 characters long.")
     if not re.search(r"[A-Z]", value):
         raise ValueError("Password must include at least one uppercase letter.")
     if not re.search(r"[a-z]", value):

@@ -1,31 +1,69 @@
+import json
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
 
 
+def _to_bool(value: str | None, default: str = "false") -> bool:
+    raw = value if value is not None else default
+    return raw.strip().lower() == "true"
+
+
+def _to_int(value: str | None, default: str = "0") -> int:
+    raw = value if value is not None else default
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return int(default)
+
+
 def _to_list(value: str | None, default: str = "") -> list[str]:
     raw = value if value is not None else default
+
+    if not raw:
+        return []
+
+    raw = raw.strip()
+
+    # Support JSON array format:
+    # FRONTEND_ORIGINS=["https://site.com","http://localhost:5173"]
+    if raw.startswith("[") and raw.endswith("]"):
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, list):
+                return [str(item).strip() for item in parsed if str(item).strip()]
+        except Exception:
+            pass
+
+    # Support comma-separated format:
+    # FRONTEND_ORIGINS=https://site.com,http://localhost:5173
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
 class Settings:
     APP_NAME = os.getenv("APP_NAME", "Web3 Intel Platform")
     APP_ENV = os.getenv("APP_ENV", "development")
-    DEBUG = os.getenv("DEBUG", "false").lower() == "true"
+    DEBUG = _to_bool(os.getenv("DEBUG"), "false")
+
     API_PREFIX = os.getenv("API_PREFIX", "/api/v1")
-    PORT = int(os.getenv("PORT", "8000"))
+    PORT = _to_int(os.getenv("PORT"), "8000")
 
     FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
     FRONTEND_ORIGINS = _to_list(
         os.getenv("FRONTEND_ORIGINS"),
-        default="http://localhost:5173,http://127.0.0.1:5173"
+        default="http://localhost:5173,http://127.0.0.1:5173,https://web3dkintel.netlify.app",
     )
+
+    # Make sure FRONTEND_URL is included in FRONTEND_ORIGINS
+    if FRONTEND_URL and FRONTEND_URL not in FRONTEND_ORIGINS:
+        FRONTEND_ORIGINS.append(FRONTEND_URL)
+
     WS_PATH = os.getenv("WS_PATH", "/ws")
 
     SECRET_KEY = os.getenv("SECRET_KEY", "change-this-in-production")
     JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-    ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
+    ACCESS_TOKEN_EXPIRE_MINUTES = _to_int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES"), "1440")
 
     TWITTER_BEARER_TOKEN = os.getenv("TWITTER_BEARER_TOKEN")
     TWITTER_API_KEY = os.getenv("TWITTER_API_KEY")
@@ -44,7 +82,7 @@ class Settings:
     GOOGLE_SEARCH_ENGINE_ID = os.getenv("GOOGLE_SEARCH_ENGINE_ID")
 
     SMTP_HOST = os.getenv("SMTP_HOST")
-    SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_PORT = _to_int(os.getenv("SMTP_PORT"), "587")
     SMTP_USER = os.getenv("SMTP_USER")
     SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
     SMTP_FROM_EMAIL = os.getenv("SMTP_FROM_EMAIL")
@@ -56,10 +94,10 @@ class Settings:
     MODEL_PATH = os.getenv("MODEL_PATH", "models/funding_predictor.pkl")
     FINBERT_MODEL = os.getenv("FINBERT_MODEL", "ProsusAI/finbert")
 
-    ENABLE_REDIS = os.getenv("ENABLE_REDIS", "true").lower() == "true"
-    ENABLE_WEBSOCKETS = os.getenv("ENABLE_WEBSOCKETS", "true").lower() == "true"
-    ENABLE_AI = os.getenv("ENABLE_AI", "true").lower() == "true"
-    ENABLE_SCRAPERS = os.getenv("ENABLE_SCRAPERS", "true").lower() == "true"
+    ENABLE_REDIS = _to_bool(os.getenv("ENABLE_REDIS"), "true")
+    ENABLE_WEBSOCKETS = _to_bool(os.getenv("ENABLE_WEBSOCKETS"), "true")
+    ENABLE_AI = _to_bool(os.getenv("ENABLE_AI"), "true")
+    ENABLE_SCRAPERS = _to_bool(os.getenv("ENABLE_SCRAPERS"), "true")
 
     def as_dict(self) -> dict:
         return {

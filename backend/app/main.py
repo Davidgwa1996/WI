@@ -3,8 +3,9 @@
 import asyncio
 import time
 
-from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app import models, schemas
@@ -57,13 +58,43 @@ app = FastAPI(
     openapi_url=f"{settings.API_PREFIX}/openapi.json",
 )
 
+allowed_origins = settings.FRONTEND_ORIGINS or []
+print("CORS allowed origins:", allowed_origins)
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    print(f"Incoming request: {request.method} {request.url}")
+    try:
+        response = await call_next(request)
+        print(f"Response status: {response.status_code}")
+        return response
+    except Exception as e:
+        print(f"Unhandled server error: {e}")
+        raise
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.FRONTEND_ORIGINS,
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    print(f"GLOBAL EXCEPTION: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "Internal server error",
+            "path": str(request.url.path),
+        },
+    )
+
 
 app.include_router(auth_router, prefix=settings.API_PREFIX)
 app.include_router(users_router, prefix=settings.API_PREFIX)
@@ -90,6 +121,7 @@ def root():
         "api_prefix": settings.API_PREFIX,
         "websocket_path": settings.WS_PATH,
         "environment": settings.APP_ENV,
+        "cors_origins": allowed_origins,
     }
 
 
@@ -166,10 +198,10 @@ def metrics(db: Session = Depends(get_db)):
     total_projects = 0
 
     if db is not None:
-      try:
-          total_projects = db.query(models.Project).count()
-      except Exception as e:
-          print(f"WARNING: Could not count projects: {e}")
+        try:
+            total_projects = db.query(models.Project).count()
+        except Exception as e:
+            print(f"WARNING: Could not count projects: {e}")
 
     return {
         "app_name": settings.APP_NAME,
@@ -210,6 +242,11 @@ async def startup_event():
         print("Database initialized successfully")
     except Exception as e:
         print(f"WARNING: Database init failed: {e}")
+
+    print("Application started")
+    print("Environment:", settings.APP_ENV)
+    print("API Prefix:", settings.API_PREFIX)
+    print("Frontend Origins:", allowed_origins)
 
     if settings.ENABLE_REDIS and listen_to_events is not None:
         try:
