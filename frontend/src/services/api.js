@@ -1,10 +1,24 @@
-﻿const RAW_API_URL =
+﻿const envApiUrl =
   import.meta.env.VITE_API_URL ||
   (import.meta.env.VITE_API_BASE_URL
     ? `${import.meta.env.VITE_API_BASE_URL}/api/v1`
-    : "http://localhost:8000/api/v1");
+    : "");
 
-const API_BASE_URL = RAW_API_URL.replace(/\/+$/, "");
+if (!envApiUrl) {
+  throw new Error("Missing VITE_API_URL or VITE_API_BASE_URL");
+}
+
+const normalizeApiUrl = (url) => {
+  const trimmed = (url || "").replace(/\/+$/, "");
+
+  if (typeof window !== "undefined" && window.location.protocol === "https:") {
+    return trimmed.replace(/^http:\/\//i, "https://");
+  }
+
+  return trimmed;
+};
+
+const API_BASE_URL = normalizeApiUrl(envApiUrl);
 const TOKEN_KEY = "w3i_token";
 
 const buildUrl = (endpoint = "") => {
@@ -19,12 +33,14 @@ const getAuthHeaders = () => {
 
 const parseErrorResponse = async (response) => {
   let message = `HTTP ${response.status}`;
+
   try {
     const data = await response.json();
     message = data?.detail || data?.message || data?.error || message;
   } catch {
     // ignore parse failure
   }
+
   return message;
 };
 
@@ -67,6 +83,12 @@ const fetchAPI = async (endpoint, options = {}) => {
 
     if (error.name === "AbortError") {
       throw new Error("Request timeout");
+    }
+
+    if (error instanceof TypeError && error.message.includes("Failed to fetch")) {
+      throw new Error(
+        "Network request failed. Please check your API URL, HTTPS configuration, or backend availability."
+      );
     }
 
     throw error;
