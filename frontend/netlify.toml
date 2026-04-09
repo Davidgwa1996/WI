@@ -5,12 +5,7 @@
 [build.environment]
   NODE_VERSION = "20"
 
-[[redirects]]
-  from = "/api/v1/*"
-  to = "https://wi-production-ae1c.up.railway.app/api/v1/:splat"
-  status = 200
-  force = true
-
+# Only redirect non-existent routes to index.html (for React Router)
 [[redirects]]
   from = "/*"
   to = "/index.html"

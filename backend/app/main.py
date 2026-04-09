@@ -2,6 +2,8 @@
 
 import asyncio
 import time
+import logging
+from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,6 +15,11 @@ from app.config import settings
 from app.database import get_db, init_db
 from app.websocket_manager import manager
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Optional imports with fallbacks
 listen_to_events = None
 detect_anomalies = None
 update_all_projects = None
@@ -20,18 +27,19 @@ update_all_projects = None
 try:
     from app.utils.pubsub import listen_to_events
 except Exception as e:
-    print(f"WARNING: Pub/Sub listener not available: {e}")
+    logger.warning(f"Pub/Sub listener not available: {e}")
 
 try:
     from app.analytics.anomaly_stream import detect_anomalies
 except Exception as e:
-    print(f"WARNING: Anomaly stream not available: {e}")
+    logger.warning(f"Anomaly stream not available: {e}")
 
 try:
     from app.tasks.scraper_tasks import update_all_projects
 except Exception as e:
-    print(f"WARNING: Celery scraper task not available: {e}")
+    logger.warning(f"Celery scraper task not available: {e}")
 
+# Import all routers
 from app.routes import (
     auth_router,
     users_router,
@@ -50,98 +58,235 @@ from app.routes import (
     agent_router,
 )
 
+
+# ============================================
+# LIFESPAN CONTEXT MANAGER (replaces on_event)
+# ============================================
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Handle startup and shutdown events."""
+    # Startup
+    logger.info("=" * 50)
+    logger.info(f"Starting {settings.APP_NAME}...")
+    logger.info(f"Environment: {settings.APP_ENV}")
+    logger.info(f"API Prefix: {settings.API_PREFIX}")
+    logger.info(f"WebSocket Path: {settings.WS_PATH}")
+    logger.info(f"Frontend URL: {settings.get_frontend_url()}")
+    logger.info(f"CORS Origins: {settings.get_cors_origins()}")
+    logger.info("=" * 50)
+    
+    # Initialize database
+    try:
+        init_db()
+        logger.info("Database initialized successfully")
+    except Exception as e:
+        logger.error(f"Database initialization failed: {e}")
+    
+    # Start Redis pub/sub listener
+    if settings.ENABLE_REDIS and listen_to_events is not None:
+        try:
+            asyncio.create_task(listen_to_events())
+            logger.info("Redis pub/sub listener started")
+        except Exception as e:
+            logger.warning(f"Could not start pub/sub listener: {e}")
+    
+    # Start anomaly detection stream
+    if detect_anomalies is not None:
+        try:
+            asyncio.create_task(detect_anomalies())
+            logger.info("Anomaly detection stream started")
+        except Exception as e:
+            logger.warning(f"Could not start anomaly stream: {e}")
+    
+    # Validate configuration
+    validation = settings.validate_config()
+    if validation["warnings"]:
+        for warning in validation["warnings"]:
+            logger.warning(f"Config warning: {warning}")
+    if not validation["is_valid"]:
+        for issue in validation["issues"]:
+            logger.error(f"Config error: {issue}")
+    
+    yield  # Application runs here
+    
+    # Shutdown
+    logger.info("Shutting down application...")
+
+
+# ============================================
+# CREATE FASTAPI APP
+# ============================================
 app = FastAPI(
     title=settings.APP_NAME,
     debug=settings.DEBUG,
-    docs_url="/docs",
-    redoc_url="/redoc",
-    openapi_url=f"{settings.API_PREFIX}/openapi.json",
+    docs_url="/docs" if settings.DEBUG else None,
+    redoc_url="/redoc" if settings.DEBUG else None,
+    openapi_url=f"{settings.API_PREFIX}/openapi.json" if settings.DEBUG else None,
+    lifespan=lifespan,
 )
 
-allowed_origins = settings.FRONTEND_ORIGINS or []
-print("CORS allowed origins:", allowed_origins)
 
-
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
-    print(f"Incoming request: {request.method} {request.url}")
-    try:
-        response = await call_next(request)
-        print(f"Response status: {response.status_code}")
-        return response
-    except Exception as e:
-        print(f"Unhandled server error: {e}")
-        raise
-
+# ============================================
+# CORS MIDDLEWARE (CRITICAL FOR FRONTEND)
+# ============================================
+allowed_origins = settings.get_cors_origins()
+logger.info(f"CORS allowed origins: {allowed_origins}")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
-    expose_headers=["*"],
+    allow_headers=[
+        "Accept",
+        "Accept-Language",
+        "Authorization",
+        "Content-Type",
+        "Origin",
+        "User-Agent",
+        "X-Requested-With",
+    ],
+    expose_headers=["Content-Length", "X-Total-Count"],
+    max_age=86400,  # Cache preflight requests for 24 hours
 )
 
 
+# ============================================
+# REQUEST LOGGING MIDDLEWARE
+# ============================================
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """Log all incoming requests and their responses."""
+    start_time = time.time()
+    
+    # Log request
+    logger.debug(f"Incoming: {request.method} {request.url.path}")
+    
+    try:
+        response = await call_next(request)
+        
+        # Calculate request duration
+        duration = time.time() - start_time
+        
+        # Log response
+        logger.debug(
+            f"Response: {response.status_code} for {request.method} {request.url.path} "
+            f"({duration:.3f}s)"
+        )
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"Request failed: {request.method} {request.url.path} - {e}")
+        raise
+
+
+# ============================================
+# GLOBAL EXCEPTION HANDLER
+# ============================================
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    print(f"GLOBAL EXCEPTION: {exc}")
+    """Handle uncaught exceptions globally."""
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
     return JSONResponse(
         status_code=500,
         content={
             "detail": "Internal server error",
             "path": str(request.url.path),
+            "method": request.method,
         },
     )
 
 
-app.include_router(auth_router, prefix=settings.API_PREFIX)
-app.include_router(users_router, prefix=settings.API_PREFIX)
-app.include_router(organizations_router, prefix=settings.API_PREFIX)
-app.include_router(api_keys_router, prefix=settings.API_PREFIX)
-app.include_router(subscriptions_router, prefix=settings.API_PREFIX)
-app.include_router(audit_logs_router, prefix=settings.API_PREFIX)
-app.include_router(invites_router, prefix=settings.API_PREFIX)
-app.include_router(workspace_router, prefix=settings.API_PREFIX)
-app.include_router(billing_router, prefix=settings.API_PREFIX)
-app.include_router(watchlists_router, prefix=settings.API_PREFIX)
-app.include_router(reports_router, prefix=settings.API_PREFIX)
-app.include_router(briefings_router, prefix=settings.API_PREFIX)
-app.include_router(search_router, prefix=settings.API_PREFIX)
-app.include_router(exports_router, prefix=settings.API_PREFIX)
-app.include_router(agent_router, prefix=settings.API_PREFIX)
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """Handle HTTP exceptions with proper logging."""
+    logger.warning(f"HTTP {exc.status_code}: {exc.detail} on {request.method} {request.url.path}")
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+    )
 
 
+# ============================================
+# INCLUDE ALL ROUTERS
+# ============================================
+app.include_router(auth_router, prefix=settings.API_PREFIX, tags=["Authentication"])
+app.include_router(users_router, prefix=settings.API_PREFIX, tags=["Users"])
+app.include_router(organizations_router, prefix=settings.API_PREFIX, tags=["Organizations"])
+app.include_router(api_keys_router, prefix=settings.API_PREFIX, tags=["API Keys"])
+app.include_router(subscriptions_router, prefix=settings.API_PREFIX, tags=["Subscriptions"])
+app.include_router(audit_logs_router, prefix=settings.API_PREFIX, tags=["Audit Logs"])
+app.include_router(invites_router, prefix=settings.API_PREFIX, tags=["Invites"])
+app.include_router(workspace_router, prefix=settings.API_PREFIX, tags=["Workspace"])
+app.include_router(billing_router, prefix=settings.API_PREFIX, tags=["Billing"])
+app.include_router(watchlists_router, prefix=settings.API_PREFIX, tags=["Watchlists"])
+app.include_router(reports_router, prefix=settings.API_PREFIX, tags=["Reports"])
+app.include_router(briefings_router, prefix=settings.API_PREFIX, tags=["Briefings"])
+app.include_router(search_router, prefix=settings.API_PREFIX, tags=["Search"])
+app.include_router(exports_router, prefix=settings.API_PREFIX, tags=["Exports"])
+app.include_router(agent_router, prefix=settings.API_PREFIX, tags=["AI Agent"])
+
+
+# ============================================
+# ROOT AND HEALTH ENDPOINTS
+# ============================================
 @app.get("/")
-def root():
+async def root():
+    """Root endpoint with API information."""
     return {
         "message": settings.APP_NAME,
         "status": "running",
+        "version": "1.0.0",
         "api_prefix": settings.API_PREFIX,
         "websocket_path": settings.WS_PATH,
         "environment": settings.APP_ENV,
+        "frontend_url": settings.get_frontend_url(),
         "cors_origins": allowed_origins,
     }
 
 
 @app.get(f"{settings.API_PREFIX}/health", response_model=schemas.HealthResponse)
-def health():
+async def health_check():
+    """Health check endpoint for Railway and monitoring."""
     return schemas.HealthResponse(
         status="healthy",
         timestamp=time.time(),
         app_name=settings.APP_NAME,
+        environment=settings.APP_ENV,
     )
 
 
+@app.get(f"{settings.API_PREFIX}/health/detailed")
+async def detailed_health_check(db: Session = Depends(get_db)):
+    """Detailed health check with database status."""
+    db_status = "connected" if db else "disconnected"
+    
+    return {
+        "status": "healthy",
+        "timestamp": time.time(),
+        "app_name": settings.APP_NAME,
+        "environment": settings.APP_ENV,
+        "database": db_status,
+        "redis_enabled": settings.ENABLE_REDIS,
+        "websockets_enabled": settings.ENABLE_WEBSOCKETS,
+        "ai_enabled": settings.ENABLE_AI,
+        "scrapers_enabled": settings.ENABLE_SCRAPERS,
+    }
+
+
+# ============================================
+# PROJECT ENDPOINTS
+# ============================================
 @app.get(f"{settings.API_PREFIX}/projects", response_model=list[schemas.ProjectOut])
-def get_projects(
+async def get_projects(
     skip: int = 0,
     limit: int = 100,
     stage: str | None = None,
     sector: str | None = None,
     db: Session = Depends(get_db),
 ):
+    """Get all projects with optional filtering."""
     if db is None:
         return []
 
@@ -157,11 +302,12 @@ def get_projects(
 
 
 @app.get(f"{settings.API_PREFIX}/projects/summary", response_model=list[schemas.ProjectListItem])
-def get_project_summaries(
+async def get_project_summaries(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
 ):
+    """Get project summaries (lightweight version for dashboard)."""
     if db is None:
         return []
 
@@ -169,7 +315,8 @@ def get_project_summaries(
 
 
 @app.get(f"{settings.API_PREFIX}/projects/{{project_id}}", response_model=schemas.ProjectOut)
-def get_project(project_id: int, db: Session = Depends(get_db)):
+async def get_project(project_id: int, db: Session = Depends(get_db)):
+    """Get a single project by ID."""
     if db is None:
         raise HTTPException(status_code=503, detail="Database not available")
 
@@ -182,7 +329,8 @@ def get_project(project_id: int, db: Session = Depends(get_db)):
 
 
 @app.post(f"{settings.API_PREFIX}/projects/refresh", response_model=schemas.ApiMessage)
-def refresh_projects():
+async def refresh_projects():
+    """Trigger a refresh of all project data."""
     if update_all_projects is None:
         raise HTTPException(status_code=503, detail="Refresh worker is not available")
 
@@ -193,15 +341,19 @@ def refresh_projects():
         raise HTTPException(status_code=500, detail=f"Could not start refresh task: {e}")
 
 
+# ============================================
+# METRICS ENDPOINT
+# ============================================
 @app.get(f"{settings.API_PREFIX}/metrics")
-def metrics(db: Session = Depends(get_db)):
+async def get_metrics(db: Session = Depends(get_db)):
+    """Get application metrics."""
     total_projects = 0
 
     if db is not None:
         try:
             total_projects = db.query(models.Project).count()
         except Exception as e:
-            print(f"WARNING: Could not count projects: {e}")
+            logger.warning(f"Could not count projects: {e}")
 
     return {
         "app_name": settings.APP_NAME,
@@ -215,10 +367,14 @@ def metrics(db: Session = Depends(get_db)):
     }
 
 
+# ============================================
+# WEBSOCKET ENDPOINT
+# ============================================
 @app.websocket(settings.WS_PATH)
 async def websocket_endpoint(websocket: WebSocket):
+    """WebSocket endpoint for real-time updates."""
     if not settings.ENABLE_WEBSOCKETS:
-        await websocket.close(code=1008)
+        await websocket.close(code=1008, reason="WebSockets disabled")
         return
 
     await manager.connect(websocket)
@@ -227,48 +383,39 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             data = await websocket.receive_text()
             if data == "ping":
-                await manager.send_personal_message({"type": "pong"}, websocket)
+                await manager.send_personal_message({"type": "pong", "timestamp": time.time()}, websocket)
     except WebSocketDisconnect:
         manager.disconnect(websocket)
     except Exception as e:
-        print(f"WebSocket error: {e}")
+        logger.error(f"WebSocket error: {e}")
         manager.disconnect(websocket)
 
 
-@app.on_event("startup")
-async def startup_event():
-    try:
-        init_db()
-        print("Database initialized successfully")
-    except Exception as e:
-        print(f"WARNING: Database init failed: {e}")
-
-    print("Application started")
-    print("Environment:", settings.APP_ENV)
-    print("API Prefix:", settings.API_PREFIX)
-    print("Frontend Origins:", allowed_origins)
-
-    if settings.ENABLE_REDIS and listen_to_events is not None:
-        try:
-            asyncio.create_task(listen_to_events())
-            print("Redis pub/sub listener started")
-        except Exception as e:
-            print(f"WARNING: Could not start pub/sub listener: {e}")
-
-    if detect_anomalies is not None:
-        try:
-            asyncio.create_task(detect_anomalies())
-            print("Anomaly detection stream started")
-        except Exception as e:
-            print(f"WARNING: Could not start anomaly stream: {e}")
+# ============================================
+# DEBUG ENDPOINT (only in development)
+# ============================================
+if settings.DEBUG:
+    @app.get("/debug/config")
+    async def debug_config():
+        """Debug endpoint to check configuration (development only)."""
+        return {
+            "frontend_url": settings.get_frontend_url(),
+            "cors_origins": settings.get_cors_origins(),
+            "environment": settings.APP_ENV,
+            "invite_expiry_hours": settings.INVITE_EXPIRY_HOURS,
+        }
 
 
+# ============================================
+# MAIN ENTRY POINT
+# ============================================
 if __name__ == "__main__":
     import uvicorn
-
+    
     uvicorn.run(
         "app.main:app",
-        host="0.0.0.0",
+        host=settings.HOST,
         port=settings.PORT,
-        reload=False,
+        reload=settings.DEBUG,
+        log_level="info",
     )

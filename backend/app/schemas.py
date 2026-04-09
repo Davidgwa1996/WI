@@ -2,7 +2,7 @@
 
 import re
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Optional, List, Dict, Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
@@ -26,22 +26,32 @@ def validate_strong_password(value: str) -> str:
     return value
 
 
+def validate_slug(value: str) -> str:
+    """Validate organization slug format."""
+    if not re.match(r"^[a-z0-9-]+$", value):
+        raise ValueError("Slug must contain only lowercase letters, numbers, and hyphens")
+    return value
+
+
 # ------------------------------------------------------------
 # Generic / common
 # ------------------------------------------------------------
 class ApiMessage(BaseModel):
     message: str
+    details: Optional[Dict[str, Any]] = None
 
 
 class HealthResponse(BaseModel):
     status: str
     timestamp: float
     app_name: str
+    environment: Optional[str] = None
 
 
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    expires_in: int = 1440  # minutes
 
 
 # ------------------------------------------------------------
@@ -63,6 +73,35 @@ class RegisterRequest(BaseModel):
     @classmethod
     def password_strength(cls, value: str) -> str:
         return validate_strong_password(value)
+    
+    @field_validator("organization_slug")
+    @classmethod
+    def slug_valid(cls, value: str) -> str:
+        return validate_slug(value)
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+    
+    @field_validator("new_password")
+    @classmethod
+    def password_strength(cls, value: str) -> str:
+        return validate_strong_password(value)
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+    
+    @field_validator("new_password")
+    @classmethod
+    def password_strength(cls, value: str) -> str:
+        return validate_strong_password(value)
 
 
 # Backward compatibility aliases
@@ -77,6 +116,17 @@ class OrganizationCreate(BaseModel):
     name: str
     slug: str
     billing_email: Optional[EmailStr] = None
+    
+    @field_validator("slug")
+    @classmethod
+    def slug_valid(cls, value: str) -> str:
+        return validate_slug(value)
+
+
+class OrganizationUpdate(BaseModel):
+    name: Optional[str] = None
+    billing_email: Optional[EmailStr] = None
+    is_active: Optional[bool] = None
 
 
 class OrganizationOut(BaseModel):
@@ -109,6 +159,12 @@ class UserOut(BaseModel):
     is_verified: bool
     created_at: datetime
     updated_at: datetime
+
+
+class UserUpdate(BaseModel):
+    full_name: Optional[str] = None
+    role: Optional[str] = None
+    is_active: Optional[bool] = None
 
 
 # ------------------------------------------------------------
@@ -218,6 +274,21 @@ class ProjectListItem(BaseModel):
     updated_at: datetime
 
 
+class ProjectHistoryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: int
+    project_id: int
+    overall_score: float
+    momentum_score: float
+    sentiment_score: float
+    twitter_followers: int
+    github_stars: int
+    discord_members: int
+    market_cap: float
+    recorded_at: datetime
+
+
 # ------------------------------------------------------------
 # API Keys
 # ------------------------------------------------------------
@@ -259,6 +330,7 @@ class SubscriptionStatusResponse(BaseModel):
     plan: str = "starter"
     is_active: bool = False
     stripe_customer_id: Optional[str] = None
+    current_period_end: Optional[datetime] = None
 
 
 # ------------------------------------------------------------
@@ -270,6 +342,7 @@ class AuditLogOut(BaseModel):
     id: int
     organization_id: int
     actor_user_id: Optional[int] = None
+    actor_user_name: Optional[str] = None
     action: str
     target_type: Optional[str] = None
     target_id: Optional[str] = None
@@ -301,6 +374,7 @@ class InviteOut(BaseModel):
     expires_at: datetime
     created_at: datetime
     updated_at: datetime
+    invite_link: Optional[str] = None
 
 
 class InviteAccept(BaseModel):
@@ -312,6 +386,10 @@ class InviteAccept(BaseModel):
     @classmethod
     def password_strength(cls, value: str) -> str:
         return validate_strong_password(value)
+
+
+class InviteResend(BaseModel):
+    email: EmailStr
 
 
 # ------------------------------------------------------------
@@ -353,10 +431,15 @@ class BillingPortalRequest(BaseModel):
 
 
 # ------------------------------------------------------------
-# Watchlists
+# Watchlists (Enhanced with Real-time Features)
 # ------------------------------------------------------------
 class WatchlistItemCreate(BaseModel):
     project_id: int
+    note: Optional[str] = None
+    tag: Optional[str] = None
+
+
+class WatchlistItemUpdate(BaseModel):
     note: Optional[str] = None
     tag: Optional[str] = None
 
@@ -365,17 +448,40 @@ class WatchlistCreate(BaseModel):
     name: str
     description: Optional[str] = None
     is_default: bool = False
+    alert_on_change: bool = True
+    alert_threshold: float = 5.0
+    notification_channels: List[str] = ["in_app"]
+
+
+class WatchlistUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    is_default: Optional[bool] = None
+    settings: Optional[Dict[str, Any]] = None
 
 
 class WatchlistItemOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    watchlist_id: int
     project_id: int
+    project_name: Optional[str] = None
+    project_description: Optional[str] = None
+    project_stage: Optional[str] = None
+    overall_score: Optional[float] = None
+    momentum_score: Optional[float] = None
+    sentiment_score: Optional[float] = None
+    funding_prediction: Optional[float] = None
+    twitter_followers: Optional[int] = None
+    github_stars: Optional[int] = None
+    discord_members: Optional[int] = None
+    market_cap: Optional[float] = None
     note: Optional[str] = None
     tag: Optional[str] = None
-    created_at: datetime
-    updated_at: datetime
+    added_at: datetime
+    added_by: Optional[int] = None
+    last_updated: Optional[datetime] = None
 
 
 class WatchlistOut(BaseModel):
@@ -386,8 +492,71 @@ class WatchlistOut(BaseModel):
     name: str
     description: Optional[str] = None
     is_default: bool
+    settings: Optional[Dict[str, Any]] = None
+    projects_count: Optional[int] = None
+    created_by: Optional[int] = None
     created_at: datetime
     updated_at: datetime
+
+
+class WatchlistLiveMetrics(BaseModel):
+    project_id: int
+    project_name: str
+    overall_score: float
+    momentum_score: float
+    sentiment_score: float
+    funding_prediction: float
+    twitter_followers: int
+    github_stars: int
+    discord_members: int
+    market_cap: float
+    score_change_24h: float
+    trend: Literal["up", "down", "stable"]
+    last_updated: Optional[str] = None
+    note: Optional[str] = None
+    tag: Optional[str] = None
+
+
+class WatchlistChangeDetection(BaseModel):
+    project_id: int
+    project_name: str
+    score_change: float
+    twitter_change: int
+    github_change: int
+    severity: Literal["high", "medium", "low"]
+    timestamp: str
+
+
+class WatchlistAlert(BaseModel):
+    project_id: int
+    project_name: str
+    type: Literal["high_conviction", "low_conviction", "high_momentum", "funding_potential", "anomaly"]
+    message: str
+    severity: Literal["info", "warning", "success", "critical"]
+    timestamp: str
+
+
+class WatchlistActivity(BaseModel):
+    id: int
+    watchlist_id: int
+    action: Literal["project_added", "project_removed", "project_updated", "alert_triggered"]
+    project_id: Optional[int] = None
+    project_name: Optional[str] = None
+    user_name: Optional[str] = None
+    timestamp: datetime
+    details: Optional[Dict[str, Any]] = None
+
+
+class WatchlistSummary(BaseModel):
+    id: int
+    name: str
+    description: Optional[str] = None
+    is_default: bool
+    projects_count: int
+    avg_overall_score: float
+    avg_momentum_score: float
+    avg_sentiment_score: float
+    created_at: Optional[str] = None
 
 
 # ------------------------------------------------------------
@@ -433,9 +602,86 @@ class BriefingOut(BaseModel):
     updated_at: datetime
 
 
+class BriefingCreate(BaseModel):
+    title: str
+    summary: str
+    points: List[str]
+    kind: str = "daily"
+
+
 # ------------------------------------------------------------
 # Search
 # ------------------------------------------------------------
 class IntelSearchResponse(BaseModel):
     query: str
     results: list[dict[str, Any]]
+    total: int
+    took_ms: float
+
+
+class SearchRequest(BaseModel):
+    query: str
+    limit: int = 20
+    offset: int = 0
+    filters: Optional[Dict[str, Any]] = None
+
+
+# ------------------------------------------------------------
+# WebSocket Messages
+# ------------------------------------------------------------
+class WebSocketMessage(BaseModel):
+    type: Literal["ping", "pong", "project_update", "watchlist_update", "alert", "anomaly"]
+    data: Dict[str, Any]
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+
+class WatchlistWebSocketMessage(BaseModel):
+    type: Literal["project_added", "project_removed", "project_updated", "alert_triggered"]
+    watchlist_id: int
+    project_id: Optional[int] = None
+    project_name: Optional[str] = None
+    data: Optional[Dict[str, Any]] = None
+    timestamp: str
+
+
+# ------------------------------------------------------------
+# Analytics & Metrics
+# ------------------------------------------------------------
+class ProjectMetrics(BaseModel):
+    project_id: int
+    project_name: str
+    overall_score: float
+    momentum_score: float
+    sentiment_score: float
+    funding_prediction: float
+    twitter_growth: float
+    github_growth: float
+    discord_growth: float
+    anomaly_detected: bool
+    last_updated: datetime
+
+
+class DashboardMetrics(BaseModel):
+    total_projects: int
+    avg_conviction_score: float
+    high_conviction_projects: int
+    anomalies_detected: int
+    active_alerts: int
+    last_updated: datetime
+
+
+# ------------------------------------------------------------
+# Exports
+# ------------------------------------------------------------
+class ExportRequest(BaseModel):
+    format: Literal["csv", "json", "pdf"]
+    project_ids: Optional[List[int]] = None
+    include_metrics: bool = True
+    include_history: bool = False
+    date_range_days: int = 30
+
+
+class ExportResponse(BaseModel):
+    download_url: str
+    expires_at: datetime
+    file_size: Optional[int] = None
