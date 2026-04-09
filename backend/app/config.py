@@ -84,23 +84,40 @@ class Settings:
     HOST = os.getenv("HOST", "0.0.0.0")
     
     # ============================================
-    # FRONTEND CONFIGURATION (CRITICAL FOR INVITES)
+    # FRONTEND CONFIGURATION (CRITICAL FOR INVITES & CORS)
     # ============================================
     # FRONTEND_URL: Used for generating invite links (ALWAYS HTTPS in production)
     # This should be set to https://web3dkintel.netlify.app in production
     FRONTEND_URL = os.getenv("FRONTEND_URL", "https://web3dkintel.netlify.app")
     
+    # Netlify frontend URL (hardcoded for production)
+    NETLIFY_URL = "https://web3dkintel.netlify.app"
+    
     # FRONTEND_ORIGINS: Used for CORS (can include localhost for development)
     # Format: comma-separated or JSON array
-    DEFAULT_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173,https://web3dkintel.netlify.app"
+    DEFAULT_ORIGINS = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://web3dkintel.netlify.app",
+    ]
+    
+    # Parse FRONTEND_ORIGINS from environment or use defaults
     FRONTEND_ORIGINS = _to_list(
         os.getenv("FRONTEND_ORIGINS"),
-        default=DEFAULT_ORIGINS,
+        default=",".join(DEFAULT_ORIGINS)
     )
+    
+    # Ensure Netlify URL is always included for production
+    if NETLIFY_URL not in FRONTEND_ORIGINS:
+        FRONTEND_ORIGINS.append(NETLIFY_URL)
+        logger.info(f"Added {NETLIFY_URL} to CORS origins")
     
     # Ensure FRONTEND_URL is included in FRONTEND_ORIGINS for CORS
     if FRONTEND_URL and FRONTEND_URL not in FRONTEND_ORIGINS:
         FRONTEND_ORIGINS.append(FRONTEND_URL)
+    
+    # Remove any duplicate origins
+    FRONTEND_ORIGINS = list(dict.fromkeys(FRONTEND_ORIGINS))
     
     # Validate HTTPS in production
     if APP_ENV == "production":
@@ -108,6 +125,9 @@ class Settings:
         for origin in FRONTEND_ORIGINS:
             if origin.startswith("http://") and "localhost" not in origin and "127.0.0.1" not in origin:
                 logger.warning(f"FRONTEND_ORIGINS contains insecure HTTP origin (non-localhost): {origin}")
+    
+    # Log CORS configuration on startup
+    logger.info(f"CORS configured with {len(FRONTEND_ORIGINS)} origins")
     
     # ============================================
     # WEBSOCKET CONFIGURATION
@@ -239,6 +259,11 @@ class Settings:
         return cls.FRONTEND_ORIGINS
     
     @classmethod
+    def get_netlify_url(cls) -> str:
+        """Get the Netlify frontend URL."""
+        return cls.NETLIFY_URL
+    
+    @classmethod
     def is_development(cls) -> bool:
         """Check if running in development mode."""
         return cls.APP_ENV == "development"
@@ -285,7 +310,9 @@ class Settings:
             "warnings": warnings,
             "environment": cls.APP_ENV,
             "frontend_url": cls.FRONTEND_URL,
+            "frontend_origins": cls.FRONTEND_ORIGINS,
             "frontend_origins_count": len(cls.FRONTEND_ORIGINS),
+            "netlify_url": cls.NETLIFY_URL,
         }
     
     def as_dict(self) -> dict:
@@ -299,8 +326,9 @@ class Settings:
             "PORT": self.PORT,
             "HOST": self.HOST,
             
-            # Frontend (critical for invites)
+            # Frontend (critical for invites and CORS)
             "FRONTEND_URL": self.FRONTEND_URL,
+            "NETLIFY_URL": self.NETLIFY_URL,
             "FRONTEND_ORIGINS": self.FRONTEND_ORIGINS,
             "INVITE_EXPIRY_HOURS": self.INVITE_EXPIRY_HOURS,
             
@@ -344,12 +372,14 @@ class Settings:
 # Create singleton instance
 settings = Settings()
 
-# Log configuration validation on startup (only in debug mode)
-if settings.DEBUG:
-    validation = settings.validate_config()
-    if validation["warnings"]:
-        for warning in validation["warnings"]:
-            logger.warning(f"Config warning: {warning}")
-    if not validation["is_valid"]:
-        for issue in validation["issues"]:
-            logger.error(f"Config error: {issue}")
+# Log configuration validation on startup
+validation = settings.validate_config()
+if validation["warnings"]:
+    for warning in validation["warnings"]:
+        logger.warning(f"Config warning: {warning}")
+if not validation["is_valid"]:
+    for issue in validation["issues"]:
+        logger.error(f"Config error: {issue}")
+
+# Log CORS origins on startup
+logger.info(f"CORS origins configured: {settings.get_cors_origins()}")

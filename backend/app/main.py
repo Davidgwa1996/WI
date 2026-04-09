@@ -129,8 +129,16 @@ app = FastAPI(
 # ============================================
 # CORS MIDDLEWARE (CRITICAL FOR FRONTEND)
 # ============================================
+# Get allowed origins from settings
 allowed_origins = settings.get_cors_origins()
-logger.info(f"CORS allowed origins: {allowed_origins}")
+
+# Ensure Netlify frontend URL is included
+netlify_url = "https://web3dkintel.netlify.app"
+if netlify_url not in allowed_origins:
+    allowed_origins.append(netlify_url)
+    logger.info(f"Added {netlify_url} to CORS origins")
+
+logger.info(f"Final CORS allowed origins: {allowed_origins}")
 
 app.add_middleware(
     CORSMiddleware,
@@ -140,13 +148,15 @@ app.add_middleware(
     allow_headers=[
         "Accept",
         "Accept-Language",
+        "Accept-Encoding",
         "Authorization",
         "Content-Type",
         "Origin",
         "User-Agent",
         "X-Requested-With",
+        "X-CSRF-Token",
     ],
-    expose_headers=["Content-Length", "X-Total-Count"],
+    expose_headers=["Content-Length", "X-Total-Count", "Content-Disposition"],
     max_age=86400,  # Cache preflight requests for 24 hours
 )
 
@@ -160,7 +170,7 @@ async def log_requests(request: Request, call_next):
     start_time = time.time()
     
     # Log request
-    logger.debug(f"Incoming: {request.method} {request.url.path}")
+    logger.info(f"Incoming: {request.method} {request.url.path} from {request.headers.get('origin', 'unknown')}")
     
     try:
         response = await call_next(request)
@@ -169,10 +179,16 @@ async def log_requests(request: Request, call_next):
         duration = time.time() - start_time
         
         # Log response
-        logger.debug(
+        logger.info(
             f"Response: {response.status_code} for {request.method} {request.url.path} "
             f"({duration:.3f}s)"
         )
+        
+        # Add CORS headers explicitly (redundant but safe)
+        origin = request.headers.get("origin")
+        if origin and origin in allowed_origins:
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
         
         return response
         
@@ -246,15 +262,15 @@ async def root():
     }
 
 
-@app.get(f"{settings.API_PREFIX}/health", response_model=schemas.HealthResponse)
+@app.get(f"{settings.API_PREFIX}/health")
 async def health_check():
     """Health check endpoint for Railway and monitoring."""
-    return schemas.HealthResponse(
-        status="healthy",
-        timestamp=time.time(),
-        app_name=settings.APP_NAME,
-        environment=settings.APP_ENV,
-    )
+    return {
+        "status": "healthy",
+        "timestamp": time.time(),
+        "app_name": settings.APP_NAME,
+        "environment": settings.APP_ENV,
+    }
 
 
 @app.get(f"{settings.API_PREFIX}/health/detailed")
@@ -273,6 +289,15 @@ async def detailed_health_check(db: Session = Depends(get_db)):
         "ai_enabled": settings.ENABLE_AI,
         "scrapers_enabled": settings.ENABLE_SCRAPERS,
     }
+
+
+# ============================================
+# CORS TEST ENDPOINT (for debugging)
+# ============================================
+@app.options(f"{settings.API_PREFIX}/cors-test")
+async def cors_test():
+    """Endpoint to test CORS configuration."""
+    return {"message": "CORS is working!"}
 
 
 # ============================================
