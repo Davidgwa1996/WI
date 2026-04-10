@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.auth.dependencies import get_current_user
 from app.database import get_db
 from app.models import Organization, User
-from app.schemas import OrganizationOut, ApiMessage
+from app.schemas import OrganizationOut, ApiMessage, BulkDeleteRequest
 
 router = APIRouter(prefix="/organizations", tags=["organizations"])
 
@@ -66,13 +66,15 @@ def delete_organization(
 
 @router.delete("/bulk-delete", response_model=ApiMessage)
 def bulk_delete_organizations(
-    org_ids: List[int],
+    payload: BulkDeleteRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
     Delete multiple organizations at once. Only owners can delete organizations they own.
+    Expects a JSON body: { "org_ids": [1, 2, 3] }
     """
+    org_ids = payload.org_ids
     if not org_ids:
         raise HTTPException(status_code=400, detail="No organization IDs provided")
 

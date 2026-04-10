@@ -165,6 +165,26 @@ app = FastAPI(
 
 
 # ============================================
+# CORS PREFLIGHT HANDLER (FIXES DELETE CORS)
+# ============================================
+@app.options("/{path:path}")
+async def options_handler(request: Request):
+    """Handle CORS preflight for all routes, especially DELETE."""
+    origin = request.headers.get("origin")
+    response = JSONResponse(content={}, status_code=200)
+    if origin and origin in settings.get_cors_origins():
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = (
+            "Accept, Accept-Language, Accept-Encoding, Authorization, "
+            "Content-Type, Origin, User-Agent, X-Requested-With, X-CSRF-Token"
+        )
+        response.headers["Access-Control-Max-Age"] = "86400"
+    return response
+
+
+# ============================================
 # SIMPLE PUBLIC HEALTH ENDPOINTS
 # ============================================
 @app.get("/health")
