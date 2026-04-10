@@ -12,16 +12,21 @@ const Organizations = () => {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [debugInfo, setDebugInfo] = useState(null);
 
   const loadOrgs = useCallback(async () => {
     try {
       setLoading(true);
       setError("");
+      setDebugInfo(null);
+      console.log("[Organizations] Loading organizations...");
       const data = await orgAPI.listAll(); // Uses /organizations/all
+      console.log("[Organizations] Loaded:", data);
       setOrganizations(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("[Organizations] Failed to load:", err);
-      setError(err.message || "Failed to load organizations. Make sure you are logged in as an owner.");
+      setError(err.message || "Failed to load organizations. Make sure you are logged in as an owner or super admin.");
+      setDebugInfo({ loadError: err.message, status: err.status });
     } finally {
       setLoading(false);
     }
@@ -57,16 +62,26 @@ const Organizations = () => {
     if (!window.confirm(`Delete ${selectedOrgs.size} organization(s)? This action cannot be undone.`)) {
       return;
     }
+    const payload = { org_ids: Array.from(selectedOrgs) };
+    console.log("[Organizations] Bulk delete payload:", payload);
     try {
       setDeleting(true);
       setError("");
-      await orgAPI.bulkDelete({ org_ids: Array.from(selectedOrgs) });
+      setDebugInfo(null);
+      await orgAPI.bulkDelete(payload);
       setSuccess(`${selectedOrgs.size} organization(s) deleted successfully`);
       setSelectedOrgs(new Set());
       await loadOrgs();
     } catch (err) {
       console.error("[Organizations] Bulk delete error:", err);
-      setError(err.message || "Failed to delete organizations");
+      let errorMessage = err.message || "Failed to delete organizations";
+      if (err.status === 422) {
+        errorMessage = "Invalid request format. Please ensure the payload matches { org_ids: [...] }.";
+      } else if (err.status === 403) {
+        errorMessage = "You don't have permission to delete these organizations. Only owners or super admins can delete.";
+      }
+      setError(errorMessage);
+      setDebugInfo({ bulkDeleteError: err.message, status: err.status, payload });
     } finally {
       setDeleting(false);
     }
@@ -76,13 +91,21 @@ const Organizations = () => {
     if (!window.confirm(`Delete organization "${orgName}"? This will delete all associated data.`)) {
       return;
     }
+    console.log("[Organizations] Deleting single org:", orgId);
     try {
       await orgAPI.delete(orgId);
       setSuccess(`Organization "${orgName}" deleted successfully`);
       await loadOrgs();
     } catch (err) {
       console.error("[Organizations] Delete single error:", err);
-      setError(err.message || "Failed to delete organization");
+      let errorMessage = err.message || "Failed to delete organization";
+      if (err.status === 403) {
+        errorMessage = "You don't have permission to delete this organization. Only owners or super admins can delete.";
+      } else if (err.status === 404) {
+        errorMessage = "Organization not found.";
+      }
+      setError(errorMessage);
+      setDebugInfo({ singleDeleteError: err.message, status: err.status, orgId });
     }
   };
 
@@ -93,15 +116,23 @@ const Organizations = () => {
         <DashboardShell>
           <Topbar 
             title="Organizations" 
-            subtitle="Manage all workspaces (owner only)" 
+            subtitle="Manage all workspaces (super admin view)" 
           />
           <SectionCard 
             title="All Workspaces" 
-            subtitle="View, select, and delete any organization you own"
+            subtitle="View, select, and delete any organization (super admin privilege)"
           >
             {error && (
               <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">
                 {error}
+                {debugInfo && process.env.NODE_ENV === "development" && (
+                  <details className="mt-2 text-xs text-red-500">
+                    <summary>Debug info</summary>
+                    <pre className="mt-1 overflow-auto rounded bg-red-100 p-2">
+                      {JSON.stringify(debugInfo, null, 2)}
+                    </pre>
+                  </details>
+                )}
               </div>
             )}
             {success && (
@@ -146,7 +177,7 @@ const Organizations = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                 </svg>
                 <p className="mt-2">No organizations found.</p>
-                <p className="mt-1 text-sm">You need to be logged in as an organization owner to see this list.</p>
+                <p className="mt-1 text-sm">You need to be logged in as a super admin to see all workspaces.</p>
               </div>
             ) : (
               <div className="space-y-3">

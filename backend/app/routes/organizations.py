@@ -13,6 +13,7 @@ router = APIRouter(prefix="/organizations", tags=["organizations"])
 # Super admin emails (comma-separated from environment)
 ADMIN_EMAILS = {email.strip().lower() for email in os.getenv("ADMIN_EMAILS", "").split(",") if email.strip()}
 
+
 def is_super_admin(user: User) -> bool:
     """Check if user is a super admin (by email)."""
     return user.email.lower() in ADMIN_EMAILS
@@ -20,6 +21,7 @@ def is_super_admin(user: User) -> bool:
 
 @router.get("/me", response_model=OrganizationOut)
 def get_my_organization(current_user: User = Depends(get_current_user)):
+    """Get the current user's organization."""
     return current_user.organization
 
 
@@ -28,12 +30,18 @@ def list_all_organizations(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Super admins can see all organizations; normal owners see only their own."""
+    """
+    List all organizations in the system.
+    Super admins see every organization; normal owners see only their own.
+    """
     if is_super_admin(current_user):
         return db.query(Organization).order_by(Organization.created_at.desc()).all()
     else:
         if current_user.role != "owner":
-            raise HTTPException(status_code=403, detail="Only owners can list organizations")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only owners can list organizations"
+            )
         return db.query(Organization).filter(Organization.id == current_user.organization_id).all()
 
 
@@ -43,16 +51,26 @@ def delete_organization(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """
+    Delete an organization.
+    Super admins can delete any organization; normal users can only delete their own.
+    """
     org = db.query(Organization).filter(Organization.id == org_id).first()
     if not org:
-        raise HTTPException(status_code=404, detail="Organization not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
 
     # Super admin can delete any organization
     if not is_super_admin(current_user):
         if current_user.organization_id != org_id:
-            raise HTTPException(status_code=403, detail="Not authorized to delete this organization")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to delete this organization"
+            )
         if current_user.role != "owner":
-            raise HTTPException(status_code=403, detail="Only organization owners can delete")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only organization owners can delete"
+            )
 
     org_name = org.name
     db.delete(org)
@@ -66,22 +84,34 @@ def bulk_delete_organizations(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """
+    Delete multiple organizations at once.
+    Super admins can delete any set; normal users can only delete organizations they own.
+    """
     org_ids = payload.org_ids
     if not org_ids:
-        raise HTTPException(status_code=400, detail="No organization IDs provided")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No organization IDs provided")
 
+    # Fetch all organizations
     orgs = db.query(Organization).filter(Organization.id.in_(org_ids)).all()
     if len(orgs) != len(org_ids):
-        raise HTTPException(status_code=404, detail="One or more organizations not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="One or more organizations not found")
 
-    # Super admin can delete any set of orgs
+    # Permission check: super admin bypasses ownership
     if not is_super_admin(current_user):
         for org in orgs:
             if current_user.organization_id != org.id:
-                raise HTTPException(status_code=403, detail=f"Not authorized to delete organization '{org.name}'")
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Not authorized to delete organization '{org.name}'"
+                )
             if current_user.role != "owner":
-                raise HTTPException(status_code=403, detail="Only organization owners can delete")
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Only organization owners can delete"
+                )
 
+    # Delete all
     for org in orgs:
         db.delete(org)
     db.commit()
