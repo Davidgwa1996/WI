@@ -119,6 +119,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.APP_NAME,
     debug=settings.DEBUG,
+    redirect_slashes=False,  # IMPORTANT: Prevents 307 redirects that break CORS
     docs_url="/docs" if settings.DEBUG else None,
     redoc_url="/redoc" if settings.DEBUG else None,
     openapi_url=f"{settings.API_PREFIX}/openapi.json" if settings.DEBUG else None,
@@ -138,6 +139,7 @@ if netlify_url not in allowed_origins:
     allowed_origins.append(netlify_url)
     logger.info(f"Added {netlify_url} to CORS origins")
 
+# Also ensure Railway backend URL is not in origins (it shouldn't be)
 logger.info(f"Final CORS allowed origins: {allowed_origins}")
 
 app.add_middleware(
