@@ -20,7 +20,9 @@ from app.websocket_manager import manager
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Optional imports with fallbacks
+# ============================================
+# OPTIONAL IMPORTS WITH FALLBACKS
+# ============================================
 listen_to_events = None
 detect_anomalies = None
 update_all_projects = None
@@ -60,14 +62,31 @@ from app.routes import (
 )
 from app.routes.uploads import router as uploads_router
 
+# ============================================
+# RETRY HELPER FOR DATABASE INITIALIZATION
+# ============================================
+async def init_db_with_retry(max_retries=5, delay=2):
+    """Try to initialize the database several times before giving up."""
+    for attempt in range(1, max_retries + 1):
+        try:
+            init_db()
+            logger.info("Database initialized successfully")
+            return True
+        except Exception as e:
+            logger.error(f"Database init attempt {attempt}/{max_retries} failed: {e}")
+            if attempt < max_retries:
+                await asyncio.sleep(delay)
+            else:
+                logger.error("Giving up on database initialization")
+                return False
+    return False
 
 # ============================================
-# LIFESPAN CONTEXT MANAGER
+# LIFESPAN CONTEXT MANAGER (non‑crashing)
 # ============================================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Handle startup and shutdown events."""
-    # Startup
+    """Handle startup and shutdown events without crashing the app."""
     logger.info("=" * 50)
     logger.info(f"Starting {settings.APP_NAME}...")
     logger.info(f"Environment: {settings.APP_ENV}")
@@ -76,31 +95,29 @@ async def lifespan(app: FastAPI):
     logger.info(f"Frontend URL: {settings.get_frontend_url()}")
     logger.info(f"CORS Origins: {settings.get_cors_origins()}")
     logger.info("=" * 50)
-    
-    # Initialize database
-    try:
-        init_db()
-        logger.info("Database initialized successfully")
-    except Exception as e:
-        logger.error(f"Database initialization failed: {e}")
-    
-    # Start Redis pub/sub listener
+
+    # Database initialization (with retries)
+    db_ok = await init_db_with_retry()
+    if not db_ok:
+        logger.warning("Database not available – some endpoints may fail")
+
+    # Redis pub/sub listener (non‑critical)
     if settings.ENABLE_REDIS and listen_to_events is not None:
         try:
             asyncio.create_task(listen_to_events())
             logger.info("Redis pub/sub listener started")
         except Exception as e:
             logger.warning(f"Could not start pub/sub listener: {e}")
-    
-    # Start anomaly detection stream
+
+    # Anomaly detection stream (non‑critical)
     if detect_anomalies is not None:
         try:
             asyncio.create_task(detect_anomalies())
             logger.info("Anomaly detection stream started")
         except Exception as e:
             logger.warning(f"Could not start anomaly stream: {e}")
-    
-    # Validate configuration
+
+    # Validate configuration (warnings only)
     validation = settings.validate_config()
     if validation["warnings"]:
         for warning in validation["warnings"]:
@@ -108,9 +125,9 @@ async def lifespan(app: FastAPI):
     if not validation["is_valid"]:
         for issue in validation["issues"]:
             logger.error(f"Config error: {issue}")
-    
+
     yield  # Application runs here
-    
+
     # Shutdown
     logger.info("Shutting down application...")
 
@@ -130,9 +147,17 @@ app = FastAPI(
 
 
 # ============================================
-# DIRECT TEST ENDPOINTS
+# SIMPLE PUBLIC HEALTH ENDPOINT (NO DEPENDENCIES)
 # ============================================
+@app.get("/health")
+async def simple_health():
+    """Health check endpoint – always returns 200 OK, even if database is down."""
+    return {"status": "ok"}
 
+
+# ============================================
+# DIRECT TEST ENDPOINTS (for debugging)
+# ============================================
 @app.get("/ping")
 async def ping():
     return {"pong": True, "timestamp": time.time()}
@@ -140,6 +165,7 @@ async def ping():
 @app.get("/api/v1/ping")
 async def api_ping():
     return {"pong": True, "timestamp": time.time()}
+
 
 @app.post("/test/create-invite")
 async def test_create_invite(email: str, db: Session = Depends(get_db)):
@@ -173,6 +199,7 @@ async def test_create_invite(email: str, db: Session = Depends(get_db)):
         logger.error(f"Test create invite failed: {e}")
         return {"error": str(e)}
 
+
 @app.get("/test/send-email")
 async def test_send_email(email: str, db: Session = Depends(get_db)):
     from app.services.email import send_invite_email
@@ -200,6 +227,7 @@ async def test_send_email(email: str, db: Session = Depends(get_db)):
         "frontend_url": settings.get_frontend_url(),
         "invite_link": test_link
     }
+
 
 @app.get("/test/db-status")
 async def test_db_status(db: Session = Depends(get_db)):
@@ -237,6 +265,7 @@ async def list_all_routes():
         "routes": routes,
         "invites_router_loaded": any("/invites" in r["path"] for r in routes)
     }
+
 
 @app.get("/debug/email-config")
 async def debug_email_config():
@@ -338,7 +367,7 @@ app.include_router(uploads_router, prefix=settings.API_PREFIX, tags=["Uploads"])
 
 
 # ============================================
-# ROOT AND HEALTH ENDPOINTS
+# ROOT AND ADDITIONAL HEALTH ENDPOINTS
 # ============================================
 @app.get("/")
 async def root():
@@ -353,14 +382,11 @@ async def root():
         "cors_origins": allowed_origins,
     }
 
-# ✅ SIMPLE PUBLIC HEALTH ENDPOINT (no dependencies)
-@app.get("/health")
-async def simple_health():
-    return {"status": "ok"}
 
 @app.get(f"{settings.API_PREFIX}/health")
 async def health_check():
     return {"status": "healthy", "timestamp": time.time(), "app_name": settings.APP_NAME, "environment": settings.APP_ENV}
+
 
 @app.get(f"{settings.API_PREFIX}/health/detailed")
 async def detailed_health_check(db: Session = Depends(get_db)):
@@ -485,7 +511,7 @@ if settings.DEBUG:
 
 
 # ============================================
-# MAIN ENTRY POINT
+# MAIN ENTRY POINT (for local execution)
 # ============================================
 if __name__ == "__main__":
     import uvicorn
