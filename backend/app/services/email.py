@@ -423,6 +423,26 @@ def get_welcome_email_html(
     """
 
 
+def get_welcome_email_text(user_name: str, organization_name: str = "Web3 Intel") -> str:
+    """Generate plain text welcome email."""
+    return f"""
+Welcome to {organization_name}!
+
+Hello {user_name},
+
+You've successfully joined {organization_name}. We're excited to have you on board!
+
+Get started by visiting your dashboard:
+{FRONTEND_URL}/dashboard
+
+Need help? Check out our documentation or contact support.
+
+---
+Web3 Intel - AI-powered Web3 intelligence
+{FRONTEND_URL}
+"""
+
+
 # ============================================
 # PROVIDER IMPLEMENTATIONS
 # ============================================
@@ -679,14 +699,25 @@ def send_welcome_email(
         organization_name=organization_name
     )
     
+    text_content = get_welcome_email_text(
+        user_name=user_name,
+        organization_name=organization_name
+    )
+    
+    # Validate email configuration before sending
+    if not email or "@" not in email:
+        logger.error(f"Invalid email address: {email}")
+        return False
+    
+    # Route to the appropriate email provider
     if EMAIL_PROVIDER == "resend":
-        return send_email_resend(email, subject, html_content)
+        return send_email_resend(email, subject, html_content, text_content)
     elif EMAIL_PROVIDER == "sendgrid":
-        return send_email_sendgrid(email, subject, html_content)
+        return send_email_sendgrid(email, subject, html_content, text_content)
     elif EMAIL_PROVIDER == "smtp":
-        return send_email_smtp(email, subject, html_content)
+        return send_email_smtp(email, subject, html_content, text_content)
     elif EMAIL_PROVIDER == "ses":
-        return send_email_ses(email, subject, html_content)
+        return send_email_ses(email, subject, html_content, text_content)
     else:
         logger.error(f"Unknown EMAIL_PROVIDER: {EMAIL_PROVIDER}")
         return False
