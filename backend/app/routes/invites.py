@@ -17,7 +17,22 @@ from app.config import settings
 # Configure logging
 logger = logging.getLogger(__name__)
 
+# DEBUG: Confirm the file is being imported
+print("DEBUG: invites.py is being loaded")
+
 router = APIRouter(prefix="/invites", tags=["invites"])
+
+# DEBUG: Confirm router prefix
+print(f"DEBUG: invites router created with prefix = {router.prefix}")
+
+
+# ============================================
+# TEST ENDPOINT – to verify router is registered
+# ============================================
+@router.get("/health")
+async def invites_health():
+    """Simple health check for invites router."""
+    return {"status": "invites router is alive"}
 
 
 # ============================================
