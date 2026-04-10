@@ -16,6 +16,7 @@ import {
   FiZap,
   FiSearch,
   FiCpu,
+  FiBriefcase, // added for Organizations
 } from "react-icons/fi";
 import { useAuth } from "../../context/AuthContext";
 
@@ -38,6 +39,8 @@ const navItems = [
   { label: "Audit Logs", to: "/audit-logs", icon: FiFileText },
   { label: "API Docs", to: "/api-docs", icon: FiFileText },
   { label: "Admin Roles", to: "/admin/roles", icon: FiShield },
+  // ✅ New: Organizations management (owner only)
+  { label: "Organizations", to: "/organizations", icon: FiBriefcase },
 ];
 
 const Sidebar = () => {
