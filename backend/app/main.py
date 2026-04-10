@@ -353,6 +353,11 @@ async def root():
         "cors_origins": allowed_origins,
     }
 
+# ✅ SIMPLE PUBLIC HEALTH ENDPOINT (no dependencies)
+@app.get("/health")
+async def simple_health():
+    return {"status": "ok"}
+
 @app.get(f"{settings.API_PREFIX}/health")
 async def health_check():
     return {"status": "healthy", "timestamp": time.time(), "app_name": settings.APP_NAME, "environment": settings.APP_ENV}
