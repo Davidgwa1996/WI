@@ -721,3 +721,11 @@ class FileUploadResponse(BaseModel):
     size: int
     category: str
     uploaded_at: str
+
+
+# ------------------------------------------------------------
+# Bulk Delete Request (for organizations)
+# ------------------------------------------------------------
+class BulkDeleteRequest(BaseModel):
+    """Request schema for deleting multiple organizations at once."""
+    org_ids: List[int]

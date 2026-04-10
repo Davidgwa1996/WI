@@ -62,7 +62,7 @@ from app.routes.uploads import router as uploads_router
 
 
 # ============================================
-# LIFESPAN CONTEXT MANAGER (replaces on_event)
+# LIFESPAN CONTEXT MANAGER
 # ============================================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -121,7 +121,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.APP_NAME,
     debug=settings.DEBUG,
-    redirect_slashes=False,  # IMPORTANT: Prevents 307 redirects that break CORS
+    redirect_slashes=False,
     docs_url="/docs" if settings.DEBUG else None,
     redoc_url="/redoc" if settings.DEBUG else None,
     openapi_url=f"{settings.API_PREFIX}/openapi.json" if settings.DEBUG else None,
@@ -130,42 +130,28 @@ app = FastAPI(
 
 
 # ============================================
-# DIRECT TEST ENDPOINTS (bypass all routers)
+# DIRECT TEST ENDPOINTS
 # ============================================
 
 @app.get("/ping")
 async def ping():
-    """Simple test endpoint to verify the app is running."""
     return {"pong": True, "timestamp": time.time()}
-
 
 @app.get("/api/v1/ping")
 async def api_ping():
-    """Simple test endpoint to verify API prefix works."""
     return {"pong": True, "timestamp": time.time()}
 
-
 @app.post("/test/create-invite")
-async def test_create_invite(
-    email: str,
-    db: Session = Depends(get_db),
-):
-    """Test endpoint to create an invite directly (bypasses invites router)."""
+async def test_create_invite(email: str, db: Session = Depends(get_db)):
     from app.services.invites import create_team_invite
-    
     if db is None:
         return {"error": "Database not available"}
-    
     try:
-        # Get first organization and user for testing
         from app.models import Organization, User
-        
         org = db.query(Organization).first()
         user = db.query(User).first()
-        
         if not org or not user:
             return {"error": f"No organization or user found. Org: {org is not None}, User: {user is not None}"}
-        
         invite, invite_link = create_team_invite(
             db=db,
             organization_id=org.id,
@@ -173,7 +159,6 @@ async def test_create_invite(
             email=email,
             role="viewer",
         )
-        
         return {
             "success": True,
             "invite_id": invite.id,
@@ -188,33 +173,17 @@ async def test_create_invite(
         logger.error(f"Test create invite failed: {e}")
         return {"error": str(e)}
 
-
 @app.get("/test/send-email")
-async def test_send_email(
-    email: str,
-    db: Session = Depends(get_db),
-):
-    """
-    Test endpoint to send an email directly.
-    Use this to debug email configuration.
-    Example: /test/send-email?email=test@example.com
-    """
+async def test_send_email(email: str, db: Session = Depends(get_db)):
     from app.services.email import send_invite_email
     from app.models import Organization, User
-    
     if db is None:
         return {"error": "Database not available"}
-    
-    # Get first organization and user for context
     org = db.query(Organization).first()
     user = db.query(User).first()
-    
     if not org or not user:
         return {"error": "No organization or user found for email context"}
-    
-    # Create a test invite link
     test_link = f"{settings.get_frontend_url()}/invite/test-token-123"
-    
     result = send_invite_email(
         email=email,
         invite_link=test_link,
@@ -223,7 +192,6 @@ async def test_send_email(
         organization_name=org.name,
         expires_hours=72
     )
-    
     return {
         "success": result,
         "email": email,
@@ -233,20 +201,15 @@ async def test_send_email(
         "invite_link": test_link
     }
 
-
 @app.get("/test/db-status")
 async def test_db_status(db: Session = Depends(get_db)):
-    """Test database connection and show basic info."""
     if db is None:
         return {"error": "Database not available"}
-    
     try:
         from app.models import Organization, User, Project
-        
         org_count = db.query(Organization).count()
         user_count = db.query(User).count()
         project_count = db.query(Project).count()
-        
         return {
             "success": True,
             "database_connected": True,
@@ -259,11 +222,10 @@ async def test_db_status(db: Session = Depends(get_db)):
 
 
 # ============================================
-# DEBUG ROUTES ENDPOINT
+# DEBUG ROUTES
 # ============================================
 @app.get("/debug/routes")
 async def list_all_routes():
-    """List all registered routes for debugging."""
     routes = []
     for route in app.routes:
         routes.append({
@@ -276,10 +238,8 @@ async def list_all_routes():
         "invites_router_loaded": any("/invites" in r["path"] for r in routes)
     }
 
-
 @app.get("/debug/email-config")
 async def debug_email_config():
-    """Show email configuration (without exposing secrets)."""
     return {
         "provider": os.getenv("EMAIL_PROVIDER", "not set"),
         "from_email": os.getenv("FROM_EMAIL", "not set"),
@@ -291,17 +251,13 @@ async def debug_email_config():
 
 
 # ============================================
-# CORS MIDDLEWARE (CRITICAL FOR FRONTEND)
+# CORS MIDDLEWARE
 # ============================================
-# Get allowed origins from settings
 allowed_origins = settings.get_cors_origins()
-
-# Ensure Netlify frontend URL is included
 netlify_url = "https://web3dkintel.netlify.app"
 if netlify_url not in allowed_origins:
     allowed_origins.append(netlify_url)
     logger.info(f"Added {netlify_url} to CORS origins")
-
 logger.info(f"Final CORS allowed origins: {allowed_origins}")
 
 app.add_middleware(
@@ -330,7 +286,6 @@ app.add_middleware(
 # ============================================
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    """Log all incoming requests and their responses."""
     start_time = time.time()
     logger.info(f"Incoming: {request.method} {request.url.path} from {request.headers.get('origin', 'unknown')}")
     try:
@@ -348,7 +303,7 @@ async def log_requests(request: Request, call_next):
 
 
 # ============================================
-# GLOBAL EXCEPTION HANDLER
+# EXCEPTION HANDLERS
 # ============================================
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -427,7 +382,7 @@ async def cors_test():
 
 
 # ============================================
-# PROJECT ENDPOINTS (existing)
+# PROJECT ENDPOINTS
 # ============================================
 @app.get(f"{settings.API_PREFIX}/projects", response_model=list[schemas.ProjectOut])
 async def get_projects(skip: int = 0, limit: int = 100, stage: str | None = None, sector: str | None = None, db: Session = Depends(get_db)):

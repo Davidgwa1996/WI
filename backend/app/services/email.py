@@ -332,7 +332,7 @@ def get_invite_email_html(
             </div>
             
             <div class="footer">
-                <p>© 2024 Web3 Intel. All rights reserved.</p>
+                <p>© 2026 Web3 Intel. All rights reserved.</p>
                 <p>
                     <a href="{FRONTEND_URL}">{FRONTEND_URL}</a> | 
                     Real-time Web3 intelligence for serious decision-making
@@ -465,7 +465,7 @@ def get_welcome_email_html(
                 </div>
             </div>
             <div class="footer">
-                <p>© 2024 Web3 Intel. All rights reserved.</p>
+                <p>© 2026 Web3 Intel. All rights reserved.</p>
             </div>
         </div>
     </div>
