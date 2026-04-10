@@ -107,10 +107,11 @@ const retryRequest = async (fn, retries = 3, delay = 1000) => {
 // ============================================
 
 const buildUrl = (endpoint = "") => {
-  const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+  // Ensure endpoint starts with /
+  let cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
   // Remove trailing slash
-  const finalEndpoint = cleanEndpoint.replace(/\/+$/, "");
-  const fullUrl = `${API_BASE_URL}${finalEndpoint}`;
+  cleanEndpoint = cleanEndpoint.replace(/\/+$/, "");
+  const fullUrl = `${API_BASE_URL}${cleanEndpoint}`;
   console.log(`[API] Request URL: ${fullUrl}`);
   return fullUrl;
 };
@@ -119,8 +120,10 @@ const getAuthHeaders = () => {
   const token = localStorage.getItem(TOKEN_KEY);
   if (token) {
     console.log('[API] Using auth token:', token.substring(0, 20) + '...');
+    return { Authorization: `Bearer ${token}` };
   }
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  console.warn('[API] No auth token found');
+  return {};
 };
 
 const parseErrorResponse = async (response) => {
@@ -185,14 +188,18 @@ const fetchAPI = async (endpoint, options = {}) => {
     console.log(`[API] ${method} ${url}`);
     
     const response = await retryRequest(async () => {
+      const headers = {
+        Accept: "application/json",
+        ...(options.body ? { "Content-Type": "application/json" } : {}),
+        ...getAuthHeaders(),
+        ...(options.headers || {}),
+      };
+      
+      console.log(`[API] Request headers:`, Object.keys(headers));
+      
       return await fetch(url, {
         method: method,
-        headers: {
-          Accept: "application/json",
-          ...(options.body ? { "Content-Type": "application/json" } : {}),
-          ...getAuthHeaders(),
-          ...(options.headers || {}),
-        },
+        headers: headers,
         body: options.body ? JSON.stringify(options.body) : undefined,
         signal: controller.signal,
       });
@@ -236,7 +243,14 @@ const fetchAPI = async (endpoint, options = {}) => {
 
 export const authAPI = {
   register: (payload) => fetchAPI("/auth/register", { method: "POST", body: payload, useCache: false }),
-  login: (payload) => fetchAPI("/auth/login", { method: "POST", body: payload, useCache: false }),
+  login: async (payload) => {
+    const result = await fetchAPI("/auth/login", { method: "POST", body: payload, useCache: false });
+    if (result && result.access_token) {
+      localStorage.setItem(TOKEN_KEY, result.access_token);
+      console.log('[API] Token saved after login');
+    }
+    return result;
+  },
   me: () => fetchAPI("/users/me", { useCache: false }),
   logout: () => {
     localStorage.removeItem(TOKEN_KEY);
@@ -248,7 +262,10 @@ export const authAPI = {
     console.log('[API] Token saved');
   },
   getToken: () => localStorage.getItem(TOKEN_KEY),
-  isAuthenticated: () => !!localStorage.getItem(TOKEN_KEY),
+  isAuthenticated: () => {
+    const token = localStorage.getItem(TOKEN_KEY);
+    return !!token && token.length > 0;
+  },
 };
 
 export const systemAPI = {
@@ -294,7 +311,6 @@ export const projectsAPI = {
   
   // Clear projects cache
   clearCache: () => {
-    // Clear all project-related cache entries
     for (const key of cache.keys()) {
       if (key.includes("/projects")) {
         cache.delete(key);
@@ -311,14 +327,28 @@ export const workspaceAPI = {
 };
 
 export const invitesAPI = {
-  list: () => fetchAPI("/invites"),
-  create: (payload) => fetchAPI("/invites", { method: "POST", body: payload, useCache: false }),
+  list: () => fetchAPI("/invites", { useCache: false }),
+  create: async (payload) => {
+    console.log('[API] Creating invite with payload:', payload);
+    try {
+      const result = await fetchAPI("/invites", { 
+        method: "POST", 
+        body: payload, 
+        useCache: false 
+      });
+      console.log('[API] Invite created successfully:', result);
+      return result;
+    } catch (error) {
+      console.error('[API] Failed to create invite:', error);
+      throw error;
+    }
+  },
   accept: (payload) => fetchAPI("/invites/accept", { method: "POST", body: payload, useCache: false }),
   resend: (inviteId) => fetchAPI(`/invites/${inviteId}/resend`, { method: "POST", useCache: false }),
   cancel: (inviteId) => fetchAPI(`/invites/${inviteId}`, { method: "DELETE", useCache: false }),
-  check: (token) => fetchAPI(`/invites/check/${token}`),
-  getStats: () => fetchAPI("/invites/stats"),
-  getConfigStatus: () => fetchAPI("/invites/config/status"),
+  check: (token) => fetchAPI(`/invites/check/${token}`, { useCache: false }),
+  getStats: () => fetchAPI("/invites/stats", { useCache: false }),
+  getConfigStatus: () => fetchAPI("/invites/config/status", { useCache: false }),
 };
 
 export const apiKeysAPI = {
@@ -374,8 +404,11 @@ export const searchAPI = {
 export const exportsAPI = {
   downloadProjectsCsv: async () => {
     console.log('[API] Downloading projects CSV');
+    const token = localStorage.getItem(TOKEN_KEY);
     const response = await fetch(buildUrl("/exports/projects.csv"), {
-      headers: { ...getAuthHeaders() },
+      headers: { 
+        Authorization: token ? `Bearer ${token}` : '',
+      },
     });
 
     if (!response.ok) {
@@ -387,8 +420,11 @@ export const exportsAPI = {
 
   downloadReportPdf: async (reportId) => {
     console.log(`[API] Downloading report PDF: ${reportId}`);
+    const token = localStorage.getItem(TOKEN_KEY);
     const response = await fetch(buildUrl(`/exports/report.pdf?report_id=${reportId}`), {
-      headers: { ...getAuthHeaders() },
+      headers: { 
+        Authorization: token ? `Bearer ${token}` : '',
+      },
     });
 
     if (!response.ok) {
@@ -400,8 +436,11 @@ export const exportsAPI = {
   
   downloadProjectsJson: async () => {
     console.log('[API] Downloading projects JSON');
+    const token = localStorage.getItem(TOKEN_KEY);
     const response = await fetch(buildUrl("/exports/projects.json"), {
-      headers: { ...getAuthHeaders() },
+      headers: { 
+        Authorization: token ? `Bearer ${token}` : '',
+      },
     });
 
     if (!response.ok) {
@@ -414,7 +453,7 @@ export const exportsAPI = {
 
 export const usersAPI = {
   list: () => fetchAPI("/users"),
-  me: () => fetchAPI("/users/me"),
+  me: () => fetchAPI("/users/me", { useCache: false }),
   updateRole: (id, role) =>
     fetchAPI(`/users/${id}/role`, {
       method: "PATCH",
@@ -446,7 +485,7 @@ export const orgAPI = {
 
 export const agentAPI = {
   chat: (payload) => fetchAPI("/agent/chat", { method: "POST", body: payload, useCache: false }),
-  summary: () => fetchAPI("/agent/workspace-summary"),
+  summary: () => fetchAPI("/agent/workspace-summary", { useCache: false }),
   analyze: (projectId) => fetchAPI(`/agent/analyze/${projectId}`),
   recommend: () => fetchAPI("/agent/recommendations"),
 };
@@ -509,6 +548,7 @@ const api = {
       API_BASE_URL,
       TOKEN_KEY,
       hasToken: !!localStorage.getItem(TOKEN_KEY),
+      tokenPreview: localStorage.getItem(TOKEN_KEY) ? localStorage.getItem(TOKEN_KEY).substring(0, 20) + '...' : null,
       env: import.meta.env.MODE,
       cacheSize: cache.size,
     });
@@ -517,5 +557,6 @@ const api = {
 
 // Log initialization
 console.log('[API] Service initialized with base URL:', API_BASE_URL);
+console.log('[API] Token present:', !!localStorage.getItem(TOKEN_KEY));
 
 export default api;
