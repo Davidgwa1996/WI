@@ -57,6 +57,9 @@ def create_team_invite(
     if not email or "@" not in email:
         raise ValueError(f"Invalid email address: {email}")
     
+    # Normalise role (lowercase, strip spaces)
+    role = role.lower().strip()
+    
     # Updated valid roles to include 'analyst'
     valid_roles = ["admin", "analyst", "member", "viewer", "owner"]
     if role not in valid_roles:

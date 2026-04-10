@@ -16,6 +16,24 @@ def get_my_organization(current_user: User = Depends(get_current_user)):
     return current_user.organization
 
 
+@router.get("/all", response_model=list[OrganizationOut])
+def list_all_organizations(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    List all organizations in the system. Only accessible by users with role 'owner'.
+    This allows you to see all test workspaces you've created (even with different emails)
+    and delete them from the frontend.
+    """
+    if current_user.role != "owner":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only organization owners can list all organizations"
+        )
+    return db.query(Organization).order_by(Organization.created_at.desc()).all()
+
+
 @router.delete("/{org_id}", response_model=ApiMessage)
 def delete_organization(
     org_id: int,

@@ -481,16 +481,10 @@ export const orgAPI = {
   update: (payload) => fetchAPI("/organizations/me", { method: "PUT", body: payload, useCache: false }),
   getSettings: () => fetchAPI("/organizations/settings"),
   updateSettings: (payload) => fetchAPI("/organizations/settings", { method: "PUT", body: payload, useCache: false }),
-  // NEW: Delete a single organization (owner only)
   delete: (orgId) => fetchAPI(`/organizations/${orgId}`, { method: "DELETE", useCache: false }),
-  // NEW: Delete multiple organizations at once (owner only)
   bulkDelete: (payload) => fetchAPI("/organizations/bulk-delete", { method: "DELETE", body: payload, useCache: false }),
-  // NEW: List all organizations the user belongs to (if backend supports it)
-  // Currently only returns the current user's org via /me. For multi-org support, backend would need to add /organizations endpoint.
-  listAll: async () => {
-    console.warn('[API] orgAPI.listAll is not yet implemented in backend. Use orgAPI.me() to get current organization.');
-    return [];
-  },
+  // ✅ FIXED: Now calls the actual backend endpoint /organizations/all
+  listAll: () => fetchAPI("/organizations/all", { useCache: false }),
 };
 
 export const agentAPI = {
