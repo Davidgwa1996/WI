@@ -1,7 +1,8 @@
 import hashlib
 import logging
+from datetime import datetime
 from sqlalchemy.orm import Session
-from sqlchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import SQLAlchemyError  # ✅ fixed typo
 
 from app.models import APIKey
 
@@ -93,8 +94,7 @@ def validate_api_key(db: Session, raw_key: str) -> APIKey | None:
     api_key = db.query(APIKey).filter(APIKey.key_hash == key_hash).first()
     
     if api_key and api_key.is_active:
-        # Update last_used_at timestamp (optional)
-        from datetime import datetime
+        # Update last_used_at timestamp
         api_key.last_used_at = datetime.utcnow()
         db.commit()
         return api_key
