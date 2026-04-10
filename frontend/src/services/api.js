@@ -35,6 +35,15 @@ console.log('[API] Using API URL:', envApiUrl);
 const normalizeApiUrl = (url) => {
   const trimmed = (url || "").replace(/\/+$/, "");
   
+  // Force HTTPS for Railway production URLs
+  if (trimmed.includes("wi-production-ae1c.up.railway.app")) {
+    const httpsUrl = trimmed.replace(/^http:\/\//i, "https://");
+    if (httpsUrl !== trimmed) {
+      console.log('[API] Forced HTTPS for Railway URL:', httpsUrl);
+    }
+    return httpsUrl;
+  }
+  
   // In production (HTTPS), force HTTPS for API calls
   if (typeof window !== "undefined" && window.location.protocol === "https:") {
     const httpsUrl = trimmed.replace(/^http:\/\//i, "https://");
@@ -53,12 +62,55 @@ const TOKEN_KEY = "w3i_token";
 console.log('[API] Normalized API Base URL:', API_BASE_URL);
 
 // ============================================
+// Simple Cache for GET requests
+// ============================================
+const cache = new Map();
+const CACHE_TTL = 60000; // 60 seconds
+
+const getCached = (key) => {
+  const cached = cache.get(key);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    console.log('[API] Cache hit for:', key);
+    return cached.data;
+  }
+  return null;
+};
+
+const setCache = (key, data) => {
+  cache.set(key, { data, timestamp: Date.now() });
+  // Clean up old cache entries
+  setTimeout(() => cache.delete(key), CACHE_TTL);
+};
+
+const clearCache = () => {
+  cache.clear();
+  console.log('[API] Cache cleared');
+};
+
+// ============================================
+// Retry logic for failed requests
+// ============================================
+const retryRequest = async (fn, retries = 3, delay = 1000) => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (i === retries - 1) throw error;
+      console.log(`[API] Retry ${i + 1}/${retries} after ${delay}ms`);
+      await new Promise(resolve => setTimeout(resolve, delay * (i + 1)));
+    }
+  }
+};
+
+// ============================================
 // Helper Functions
 // ============================================
 
 const buildUrl = (endpoint = "") => {
   const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
-  const fullUrl = `${API_BASE_URL}${cleanEndpoint}`;
+  // Remove trailing slash
+  const finalEndpoint = cleanEndpoint.replace(/\/+$/, "");
+  const fullUrl = `${API_BASE_URL}${finalEndpoint}`;
   console.log(`[API] Request URL: ${fullUrl}`);
   return fullUrl;
 };
@@ -90,7 +142,9 @@ const handleResponse = async (response) => {
   if (!response.ok) {
     const errorMsg = await parseErrorResponse(response);
     console.error(`[API] Error response: ${errorMsg}`);
-    throw new Error(errorMsg);
+    const error = new Error(errorMsg);
+    error.status = response.status;
+    throw error;
   }
 
   if (response.status === 204) return null;
@@ -106,33 +160,53 @@ const handleResponse = async (response) => {
 };
 
 // ============================================
-// Main Fetch Function
+// Main Fetch Function with Cache & Retry
 // ============================================
 
 const fetchAPI = async (endpoint, options = {}) => {
+  const method = options.method || "GET";
+  const useCache = options.useCache !== false && method === "GET";
+  const cacheKey = `${method}:${endpoint}:${JSON.stringify(options.body || {})}`;
+  
+  // Check cache for GET requests
+  if (useCache) {
+    const cachedData = getCached(cacheKey);
+    if (cachedData) {
+      return cachedData;
+    }
+  }
+  
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeout || 30000);
 
   try {
     const url = buildUrl(endpoint);
-    const method = options.method || "GET";
     
     console.log(`[API] ${method} ${url}`);
     
-    const response = await fetch(url, {
-      method: method,
-      headers: {
-        Accept: "application/json",
-        ...(options.body ? { "Content-Type": "application/json" } : {}),
-        ...getAuthHeaders(),
-        ...(options.headers || {}),
-      },
-      body: options.body ? JSON.stringify(options.body) : undefined,
-      signal: controller.signal,
-    });
+    const response = await retryRequest(async () => {
+      return await fetch(url, {
+        method: method,
+        headers: {
+          Accept: "application/json",
+          ...(options.body ? { "Content-Type": "application/json" } : {}),
+          ...getAuthHeaders(),
+          ...(options.headers || {}),
+        },
+        body: options.body ? JSON.stringify(options.body) : undefined,
+        signal: controller.signal,
+      });
+    }, options.retries || 2, options.retryDelay || 500);
 
     clearTimeout(timeout);
-    return await handleResponse(response);
+    const result = await handleResponse(response);
+    
+    // Cache successful GET responses
+    if (useCache && response.ok) {
+      setCache(cacheKey, result);
+    }
+    
+    return result;
   } catch (error) {
     clearTimeout(timeout);
 
@@ -161,11 +235,12 @@ const fetchAPI = async (endpoint, options = {}) => {
 // ============================================
 
 export const authAPI = {
-  register: (payload) => fetchAPI("/auth/register", { method: "POST", body: payload }),
-  login: (payload) => fetchAPI("/auth/login", { method: "POST", body: payload }),
-  me: () => fetchAPI("/users/me"),
+  register: (payload) => fetchAPI("/auth/register", { method: "POST", body: payload, useCache: false }),
+  login: (payload) => fetchAPI("/auth/login", { method: "POST", body: payload, useCache: false }),
+  me: () => fetchAPI("/users/me", { useCache: false }),
   logout: () => {
     localStorage.removeItem(TOKEN_KEY);
+    clearCache();
     console.log('[API] User logged out');
   },
   setToken: (token) => {
@@ -177,13 +252,13 @@ export const authAPI = {
 };
 
 export const systemAPI = {
-  getHealth: () => fetchAPI("/health"),
+  getHealth: () => fetchAPI("/health", { useCache: false }),
   getMetrics: () => fetchAPI("/metrics"),
   getConfig: () => fetchAPI("/config/status"),
 };
 
 export const projectsAPI = {
-  getAll: (params = {}) => {
+  getAll: (params = {}, options = {}) => {
     const query = new URLSearchParams();
     if (params.skip !== undefined) query.set("skip", params.skip);
     if (params.limit !== undefined) query.set("limit", params.limit);
@@ -192,7 +267,7 @@ export const projectsAPI = {
 
     const qs = query.toString();
     console.log('[API] Fetching projects with params:', params);
-    return fetchAPI(`/projects${qs ? `?${qs}` : ""}`);
+    return fetchAPI(`/projects${qs ? `?${qs}` : ""}`, options);
   },
 
   getSummary: (params = {}) => {
@@ -204,32 +279,43 @@ export const projectsAPI = {
     return fetchAPI(`/projects/summary${qs ? `?${qs}` : ""}`);
   },
 
-  getById: (id) => {
+  getById: (id, options = {}) => {
     console.log(`[API] Fetching project ${id}`);
-    return fetchAPI(`/projects/${id}`);
+    return fetchAPI(`/projects/${id}`, options);
   },
   
-  refresh: () => fetchAPI("/projects/refresh", { method: "POST" }),
+  refresh: () => fetchAPI("/projects/refresh", { method: "POST", useCache: false }),
   
-  create: (payload) => fetchAPI("/projects", { method: "POST", body: payload }),
+  create: (payload) => fetchAPI("/projects", { method: "POST", body: payload, useCache: false }),
   
-  update: (id, payload) => fetchAPI(`/projects/${id}`, { method: "PUT", body: payload }),
+  update: (id, payload) => fetchAPI(`/projects/${id}`, { method: "PUT", body: payload, useCache: false }),
   
-  delete: (id) => fetchAPI(`/projects/${id}`, { method: "DELETE" }),
+  delete: (id) => fetchAPI(`/projects/${id}`, { method: "DELETE", useCache: false }),
+  
+  // Clear projects cache
+  clearCache: () => {
+    // Clear all project-related cache entries
+    for (const key of cache.keys()) {
+      if (key.includes("/projects")) {
+        cache.delete(key);
+      }
+    }
+    console.log('[API] Projects cache cleared');
+  },
 };
 
 export const workspaceAPI = {
   getSettings: () => fetchAPI("/workspace/settings"),
   updateSettings: (payload) =>
-    fetchAPI("/workspace/settings", { method: "PUT", body: payload }),
+    fetchAPI("/workspace/settings", { method: "PUT", body: payload, useCache: false }),
 };
 
 export const invitesAPI = {
   list: () => fetchAPI("/invites"),
-  create: (payload) => fetchAPI("/invites", { method: "POST", body: payload }),
-  accept: (payload) => fetchAPI("/invites/accept", { method: "POST", body: payload }),
-  resend: (inviteId) => fetchAPI(`/invites/${inviteId}/resend`, { method: "POST" }),
-  cancel: (inviteId) => fetchAPI(`/invites/${inviteId}`, { method: "DELETE" }),
+  create: (payload) => fetchAPI("/invites", { method: "POST", body: payload, useCache: false }),
+  accept: (payload) => fetchAPI("/invites/accept", { method: "POST", body: payload, useCache: false }),
+  resend: (inviteId) => fetchAPI(`/invites/${inviteId}/resend`, { method: "POST", useCache: false }),
+  cancel: (inviteId) => fetchAPI(`/invites/${inviteId}`, { method: "DELETE", useCache: false }),
   check: (token) => fetchAPI(`/invites/check/${token}`),
   getStats: () => fetchAPI("/invites/stats"),
   getConfigStatus: () => fetchAPI("/invites/config/status"),
@@ -237,28 +323,28 @@ export const invitesAPI = {
 
 export const apiKeysAPI = {
   list: () => fetchAPI("/api-keys"),
-  create: (payload) => fetchAPI("/api-keys", { method: "POST", body: payload }),
-  revoke: (id) => fetchAPI(`/api-keys/${id}`, { method: "DELETE" }),
+  create: (payload) => fetchAPI("/api-keys", { method: "POST", body: payload, useCache: false }),
+  revoke: (id) => fetchAPI(`/api-keys/${id}`, { method: "DELETE", useCache: false }),
 };
 
 export const billingAPI = {
   status: () => fetchAPI("/subscriptions/status"),
-  checkout: (payload) => fetchAPI("/billing/checkout", { method: "POST", body: payload }),
-  portal: (payload) => fetchAPI("/billing/portal", { method: "POST", body: payload }),
+  checkout: (payload) => fetchAPI("/billing/checkout", { method: "POST", body: payload, useCache: false }),
+  portal: (payload) => fetchAPI("/billing/portal", { method: "POST", body: payload, useCache: false }),
 };
 
 export const watchlistsAPI = {
   list: () => fetchAPI("/watchlists"),
   getById: (id) => fetchAPI(`/watchlists/${id}`),
-  create: (payload) => fetchAPI("/watchlists", { method: "POST", body: payload }),
-  update: (id, payload) => fetchAPI(`/watchlists/${id}`, { method: "PUT", body: payload }),
-  delete: (id) => fetchAPI(`/watchlists/${id}`, { method: "DELETE" }),
+  create: (payload) => fetchAPI("/watchlists", { method: "POST", body: payload, useCache: false }),
+  update: (id, payload) => fetchAPI(`/watchlists/${id}`, { method: "PUT", body: payload, useCache: false }),
+  delete: (id) => fetchAPI(`/watchlists/${id}`, { method: "DELETE", useCache: false }),
   addItem: (watchlistId, payload) =>
-    fetchAPI(`/watchlists/${watchlistId}/items`, { method: "POST", body: payload }),
+    fetchAPI(`/watchlists/${watchlistId}/items`, { method: "POST", body: payload, useCache: false }),
   removeItem: (watchlistId, projectId) =>
-    fetchAPI(`/watchlists/${watchlistId}/items/${projectId}`, { method: "DELETE" }),
+    fetchAPI(`/watchlists/${watchlistId}/items/${projectId}`, { method: "DELETE", useCache: false }),
   getItems: (watchlistId) => fetchAPI(`/watchlists/${watchlistId}/items`),
-  getLiveMetrics: (watchlistId) => fetchAPI(`/watchlists/${watchlistId}/live`),
+  getLiveMetrics: (watchlistId) => fetchAPI(`/watchlists/${watchlistId}/live`, { useCache: false }),
   getChanges: (watchlistId, hours = 24) => fetchAPI(`/watchlists/${watchlistId}/changes?hours=${hours}`),
   getAlerts: (watchlistId) => fetchAPI(`/watchlists/${watchlistId}/alerts`),
   getSummary: () => fetchAPI("/watchlists/summary/all"),
@@ -266,17 +352,17 @@ export const watchlistsAPI = {
 
 export const reportsAPI = {
   list: () => fetchAPI("/reports"),
-  create: (payload) => fetchAPI("/reports", { method: "POST", body: payload }),
+  create: (payload) => fetchAPI("/reports", { method: "POST", body: payload, useCache: false }),
   getById: (id) => fetchAPI(`/reports/${id}`),
-  delete: (id) => fetchAPI(`/reports/${id}`, { method: "DELETE" }),
+  delete: (id) => fetchAPI(`/reports/${id}`, { method: "DELETE", useCache: false }),
 };
 
 export const briefingsAPI = {
   list: () => fetchAPI("/briefings"),
   getById: (id) => fetchAPI(`/briefings/${id}`),
-  create: (payload) => fetchAPI("/briefings", { method: "POST", body: payload }),
-  sendEmail: () => fetchAPI("/briefings/send", { method: "POST" }),
-  generate: () => fetchAPI("/briefings/generate", { method: "POST" }),
+  create: (payload) => fetchAPI("/briefings", { method: "POST", body: payload, useCache: false }),
+  sendEmail: () => fetchAPI("/briefings/send", { method: "POST", useCache: false }),
+  generate: () => fetchAPI("/briefings/generate", { method: "POST", useCache: false }),
 };
 
 export const searchAPI = {
@@ -333,11 +419,12 @@ export const usersAPI = {
     fetchAPI(`/users/${id}/role`, {
       method: "PATCH",
       body: { role },
+      useCache: false,
     }),
   updateProfile: (payload) =>
-    fetchAPI("/users/me", { method: "PUT", body: payload }),
+    fetchAPI("/users/me", { method: "PUT", body: payload, useCache: false }),
   changePassword: (payload) =>
-    fetchAPI("/users/change-password", { method: "POST", body: payload }),
+    fetchAPI("/users/change-password", { method: "POST", body: payload, useCache: false }),
 };
 
 export const auditAPI = {
@@ -352,13 +439,13 @@ export const auditAPI = {
 
 export const orgAPI = {
   me: () => fetchAPI("/organizations/me"),
-  update: (payload) => fetchAPI("/organizations/me", { method: "PUT", body: payload }),
+  update: (payload) => fetchAPI("/organizations/me", { method: "PUT", body: payload, useCache: false }),
   getSettings: () => fetchAPI("/organizations/settings"),
-  updateSettings: (payload) => fetchAPI("/organizations/settings", { method: "PUT", body: payload }),
+  updateSettings: (payload) => fetchAPI("/organizations/settings", { method: "PUT", body: payload, useCache: false }),
 };
 
 export const agentAPI = {
-  chat: (payload) => fetchAPI("/agent/chat", { method: "POST", body: payload }),
+  chat: (payload) => fetchAPI("/agent/chat", { method: "POST", body: payload, useCache: false }),
   summary: () => fetchAPI("/agent/workspace-summary"),
   analyze: (projectId) => fetchAPI(`/agent/analyze/${projectId}`),
   recommend: () => fetchAPI("/agent/recommendations"),
@@ -372,9 +459,7 @@ export const competitorsAPI = {
   getAll: async () => {
     console.log('[API] Fetching competitors');
     try {
-      // Try to get from projects endpoint first
       const projects = await projectsAPI.getAll({ limit: 100 });
-      // Filter for competitor projects (you can adjust this logic)
       const competitors = projects.filter(p => p.sector === "Competitor" || p.tags?.includes("competitor"));
       return competitors;
     } catch (error) {
@@ -416,6 +501,7 @@ const api = {
   getAuthToken: authAPI.getToken,
   isAuthenticated: authAPI.isAuthenticated,
   logout: authAPI.logout,
+  clearCache: clearCache,
   
   // Debug method
   debug: () => {
@@ -424,6 +510,7 @@ const api = {
       TOKEN_KEY,
       hasToken: !!localStorage.getItem(TOKEN_KEY),
       env: import.meta.env.MODE,
+      cacheSize: cache.size,
     });
   },
 };
