@@ -1,12 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from typing import List
+from fastapi import APIRouter, Depends, HTTPException, status, Request
+from typing import List, Union
 import os
+import json
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user
 from app.database import get_db
 from app.models import Organization, User
-from app.schemas import OrganizationOut, ApiMessage, BulkDeleteRequest
+from app.schemas import OrganizationOut, ApiMessage
 
 router = APIRouter(prefix="/organizations", tags=["organizations"])
 
@@ -80,15 +81,33 @@ def delete_organization(
 
 @router.delete("/bulk-delete", response_model=ApiMessage)
 def bulk_delete_organizations(
-    payload: BulkDeleteRequest,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
     Delete multiple organizations at once.
+    Accepts either a JSON array of IDs or an object with "org_ids" field.
     Super admins can delete any set; normal users can only delete organizations they own.
     """
-    org_ids = payload.org_ids
+    try:
+        body = request.json()
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON body")
+
+    # Support both {"org_ids": [...]} and plain [...]
+    if isinstance(body, list):
+        org_ids = body
+    elif isinstance(body, dict) and "org_ids" in body:
+        org_ids = body["org_ids"]
+        if not isinstance(org_ids, list):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="org_ids must be a list")
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Expected a list of IDs or an object with 'org_ids' field"
+        )
+
     if not org_ids:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No organization IDs provided")
 
