@@ -708,3 +708,16 @@ class ExportResponse(BaseModel):
     download_url: str
     expires_at: datetime
     file_size: Optional[int] = None
+
+
+# ------------------------------------------------------------
+# File Uploads
+# ------------------------------------------------------------
+class FileUploadResponse(BaseModel):
+    """Response schema for file uploads."""
+    filename: str
+    saved_name: str
+    url: str
+    size: int
+    category: str
+    uploaded_at: str

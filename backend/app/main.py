@@ -3,6 +3,7 @@
 import asyncio
 import time
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
@@ -57,6 +58,7 @@ from app.routes import (
     exports_router,
     agent_router,
 )
+from app.routes.uploads import router as uploads_router
 
 
 # ============================================
@@ -225,7 +227,7 @@ async def test_send_email(
     return {
         "success": result,
         "email": email,
-        "from_email": settings.SMTP_FROM_EMAIL or os.getenv("FROM_EMAIL"),
+        "from_email": os.getenv("FROM_EMAIL", "not set"),
         "provider": os.getenv("EMAIL_PROVIDER", "not set"),
         "frontend_url": settings.get_frontend_url(),
         "invite_link": test_link
@@ -278,7 +280,6 @@ async def list_all_routes():
 @app.get("/debug/email-config")
 async def debug_email_config():
     """Show email configuration (without exposing secrets)."""
-    import os
     return {
         "provider": os.getenv("EMAIL_PROVIDER", "not set"),
         "from_email": os.getenv("FROM_EMAIL", "not set"),
@@ -378,6 +379,7 @@ app.include_router(briefings_router, prefix=settings.API_PREFIX, tags=["Briefing
 app.include_router(search_router, prefix=settings.API_PREFIX, tags=["Search"])
 app.include_router(exports_router, prefix=settings.API_PREFIX, tags=["Exports"])
 app.include_router(agent_router, prefix=settings.API_PREFIX, tags=["AI Agent"])
+app.include_router(uploads_router, prefix=settings.API_PREFIX, tags=["Uploads"])
 
 
 # ============================================

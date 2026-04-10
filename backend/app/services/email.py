@@ -22,7 +22,7 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "https://web3dkintel.netlify.app")
 # Email provider selection
 EMAIL_PROVIDER = os.getenv("EMAIL_PROVIDER", "resend")  # resend, sendgrid, smtp, ses
 
-# Sender email address
+# Sender email address - IMPORTANT: Resend does NOT allow Gmail addresses
 FROM_EMAIL = os.getenv("FROM_EMAIL", "invites@web3dkintel.com")
 FROM_NAME = os.getenv("FROM_NAME", "Web3 Intel")
 
@@ -45,6 +45,61 @@ AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", "")
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "")
 
 # ============================================
+# VALIDATION HELPER
+# ============================================
+
+def validate_email_config() -> Dict[str, Any]:
+    """Validate email configuration and provide warnings."""
+    config_status = {
+        "provider": EMAIL_PROVIDER,
+        "from_email": FROM_EMAIL,
+        "from_name": FROM_NAME,
+        "frontend_url": FRONTEND_URL,
+        "configured": False,
+        "missing": [],
+        "warnings": []
+    }
+    
+    # Check required fields
+    if not FROM_EMAIL:
+        config_status["missing"].append("FROM_EMAIL")
+    else:
+        # Resend does not allow Gmail addresses
+        if EMAIL_PROVIDER == "resend" and "@gmail.com" in FROM_EMAIL:
+            config_status["warnings"].append(
+                "Resend does not allow sending from Gmail addresses. "
+                "Please use 'onboarding@resend.dev' or a verified domain email."
+            )
+    
+    if not FRONTEND_URL:
+        config_status["missing"].append("FRONTEND_URL")
+    elif not FRONTEND_URL.startswith("https://"):
+        config_status["warnings"].append("FRONTEND_URL should use HTTPS in production")
+    
+    # Check provider-specific configuration
+    if EMAIL_PROVIDER == "resend":
+        if not RESEND_API_KEY:
+            config_status["missing"].append("RESEND_API_KEY")
+    
+    elif EMAIL_PROVIDER == "sendgrid":
+        if not SENDGRID_API_KEY:
+            config_status["missing"].append("SENDGRID_API_KEY")
+    
+    elif EMAIL_PROVIDER == "smtp":
+        if not SMTP_HOST:
+            config_status["missing"].append("SMTP_HOST")
+        if not SMTP_USER or not SMTP_PASSWORD:
+            config_status["missing"].append("SMTP_USER or SMTP_PASSWORD")
+    
+    elif EMAIL_PROVIDER == "ses":
+        if not AWS_REGION:
+            config_status["missing"].append("AWS_REGION")
+    
+    config_status["configured"] = len(config_status["missing"]) == 0
+    
+    return config_status
+
+# ============================================
 # EMAIL TEMPLATES
 # ============================================
 
@@ -56,8 +111,7 @@ def get_invite_email_html(
     expires_hours: int = 72
 ) -> str:
     """Generate beautiful HTML email template for invite."""
-    return f"""
-<!DOCTYPE html>
+    return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -290,7 +344,6 @@ def get_invite_email_html(
 </html>
     """
 
-
 def get_invite_email_text(
     invite_link: str,
     role: str,
@@ -298,7 +351,7 @@ def get_invite_email_text(
     organization_name: str = "Web3 Intel",
     expires_hours: int = 72
 ) -> str:
-    """Generate plain text email template for invite (fallback for email clients that don't support HTML)."""
+    """Generate plain text email template for invite."""
     return f"""
 ═══════════════════════════════════════
          INVITATION TO JOIN
@@ -335,14 +388,12 @@ Web3 Intel - AI-powered Web3 intelligence
 ═══════════════════════════════════════
     """
 
-
 def get_welcome_email_html(
     user_name: str,
     organization_name: str = "Web3 Intel"
 ) -> str:
     """Generate welcome email for new users."""
-    return f"""
-<!DOCTYPE html>
+    return f"""<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
@@ -422,7 +473,6 @@ def get_welcome_email_html(
 </html>
     """
 
-
 def get_welcome_email_text(user_name: str, organization_name: str = "Web3 Intel") -> str:
     """Generate plain text welcome email."""
     return f"""
@@ -442,7 +492,6 @@ Web3 Intel - AI-powered Web3 intelligence
 {FRONTEND_URL}
 """
 
-
 # ============================================
 # PROVIDER IMPLEMENTATIONS
 # ============================================
@@ -453,11 +502,15 @@ def send_email_resend(
     html_content: str,
     text_content: Optional[str] = None
 ) -> bool:
-    """Send email using Resend API."""
+    """Send email using Resend API with detailed error logging."""
     try:
         import resend
-        
         resend.api_key = RESEND_API_KEY
+        
+        # Resend does NOT allow Gmail from addresses
+        if "@gmail.com" in FROM_EMAIL:
+            logger.error(f"Resend does not allow sending from Gmail address: {FROM_EMAIL}")
+            return False
         
         params = {
             "from": f"{FROM_NAME} <{FROM_EMAIL}>",
@@ -465,21 +518,26 @@ def send_email_resend(
             "subject": subject,
             "html": html_content,
         }
-        
         if text_content:
             params["text"] = text_content
         
-        email = resend.Emails.send(params)
-        logger.info(f"Email sent via Resend to {to_email}: {email}")
+        resp = resend.Emails.send(params)
+        logger.info(f"Email sent via Resend to {to_email}: {resp}")
         return True
         
     except ImportError:
         logger.error("Resend library not installed. Run: pip install resend")
         return False
     except Exception as e:
-        logger.error(f"Failed to send email via Resend to {to_email}: {e}")
+        # Try to extract detailed error from Resend
+        error_detail = str(e)
+        if hasattr(e, 'response') and e.response:
+            try:
+                error_detail = e.response.json().get('message', error_detail)
+            except:
+                pass
+        logger.error(f"Resend error to {to_email}: {error_detail}")
         return False
-
 
 def send_email_sendgrid(
     to_email: str,
@@ -498,27 +556,24 @@ def send_email_sendgrid(
             subject=subject,
             html_content=html_content
         )
-        
         if text_content:
             message.content = Content("text/plain", text_content)
         
         sg = SendGridAPIClient(SENDGRID_API_KEY)
         response = sg.send(message)
         
-        if response.status_code in [200, 202]:
+        if response.status_code in (200, 202):
             logger.info(f"Email sent via SendGrid to {to_email}")
             return True
         else:
-            logger.error(f"SendGrid returned status {response.status_code}")
+            logger.error(f"SendGrid error {response.status_code}: {response.body}")
             return False
-        
     except ImportError:
         logger.error("SendGrid library not installed. Run: pip install sendgrid")
         return False
     except Exception as e:
-        logger.error(f"Failed to send email via SendGrid to {to_email}: {e}")
+        logger.error(f"SendGrid error to {to_email}: {e}")
         return False
-
 
 def send_email_smtp(
     to_email: str,
@@ -540,7 +595,6 @@ def send_email_smtp(
         if text_content:
             part1 = MIMEText(text_content, "plain")
             msg.attach(part1)
-        
         part2 = MIMEText(html_content, "html")
         msg.attach(part2)
         
@@ -555,17 +609,11 @@ def send_email_smtp(
         
         server.send_message(msg)
         server.quit()
-        
         logger.info(f"Email sent via SMTP to {to_email}")
         return True
-        
-    except ImportError:
-        logger.error("SMTP libraries are built-in")
-        return False
     except Exception as e:
-        logger.error(f"Failed to send email via SMTP to {to_email}: {e}")
+        logger.error(f"SMTP error to {to_email}: {e}")
         return False
-
 
 def send_email_ses(
     to_email: str,
@@ -598,20 +646,14 @@ def send_email_ses(
                 "Body": body
             }
         )
-        
         logger.info(f"Email sent via SES to {to_email}: {response['MessageId']}")
         return True
-        
-    except ImportError:
-        logger.error("boto3 library not installed. Run: pip install boto3")
-        return False
     except ClientError as e:
-        logger.error(f"Failed to send email via SES to {to_email}: {e}")
+        logger.error(f"SES error to {to_email}: {e.response['Error']['Message']}")
         return False
     except Exception as e:
-        logger.error(f"Unexpected error with SES: {e}")
+        logger.error(f"SES error to {to_email}: {e}")
         return False
-
 
 # ============================================
 # MAIN EMAIL SENDING FUNCTIONS
@@ -625,44 +667,20 @@ def send_invite_email(
     organization_name: str = "Web3 Intel",
     expires_hours: int = 72
 ) -> bool:
-    """
-    Send an invite email to a user.
-    
-    Args:
-        email: Recipient email address
-        invite_link: Full HTTPS invite link
-        role: User role (admin, member, viewer, etc.)
-        invited_by: Name of the person who sent the invite
-        organization_name: Name of the organization
-        expires_hours: Hours until invite expires
-    
-    Returns:
-        True if email was sent successfully, False otherwise
-    """
+    """Send an invite email to a user."""
     subject = f"You've been invited to join {organization_name} as a {role}"
-    
     html_content = get_invite_email_html(
-        invite_link=invite_link,
-        role=role,
-        invited_by=invited_by,
-        organization_name=organization_name,
-        expires_hours=expires_hours
+        invite_link, role, invited_by, organization_name, expires_hours
     )
-    
     text_content = get_invite_email_text(
-        invite_link=invite_link,
-        role=role,
-        invited_by=invited_by,
-        organization_name=organization_name,
-        expires_hours=expires_hours
+        invite_link, role, invited_by, organization_name, expires_hours
     )
     
-    # Validate email configuration before sending
     if not email or "@" not in email:
         logger.error(f"Invalid email address: {email}")
         return False
     
-    # Route to the appropriate email provider
+    # Route to provider
     if EMAIL_PROVIDER == "resend":
         return send_email_resend(email, subject, html_content, text_content)
     elif EMAIL_PROVIDER == "sendgrid":
@@ -674,42 +692,21 @@ def send_invite_email(
     else:
         logger.error(f"Unknown EMAIL_PROVIDER: {EMAIL_PROVIDER}")
         return False
-
 
 def send_welcome_email(
     email: str,
     user_name: str,
     organization_name: str = "Web3 Intel"
 ) -> bool:
-    """
-    Send a welcome email to a new user.
-    
-    Args:
-        email: Recipient email address
-        user_name: Name of the user
-        organization_name: Name of the organization
-    
-    Returns:
-        True if email was sent successfully, False otherwise
-    """
+    """Send a welcome email to a new user."""
     subject = f"Welcome to {organization_name}!"
+    html_content = get_welcome_email_html(user_name, organization_name)
+    text_content = get_welcome_email_text(user_name, organization_name)
     
-    html_content = get_welcome_email_html(
-        user_name=user_name,
-        organization_name=organization_name
-    )
-    
-    text_content = get_welcome_email_text(
-        user_name=user_name,
-        organization_name=organization_name
-    )
-    
-    # Validate email configuration before sending
     if not email or "@" not in email:
         logger.error(f"Invalid email address: {email}")
         return False
     
-    # Route to the appropriate email provider
     if EMAIL_PROVIDER == "resend":
         return send_email_resend(email, subject, html_content, text_content)
     elif EMAIL_PROVIDER == "sendgrid":
@@ -722,70 +719,22 @@ def send_welcome_email(
         logger.error(f"Unknown EMAIL_PROVIDER: {EMAIL_PROVIDER}")
         return False
 
-
 # ============================================
 # UTILITY FUNCTIONS
 # ============================================
 
-def validate_email_config() -> Dict[str, Any]:
-    """Validate that email configuration is complete."""
-    config_status = {
-        "provider": EMAIL_PROVIDER,
-        "from_email": FROM_EMAIL,
-        "from_name": FROM_NAME,
-        "frontend_url": FRONTEND_URL,
-        "configured": False,
-        "missing": [],
-        "warnings": []
-    }
-    
-    # Check required fields
-    if not FROM_EMAIL:
-        config_status["missing"].append("FROM_EMAIL")
-    
-    if not FRONTEND_URL:
-        config_status["missing"].append("FRONTEND_URL")
-    elif not FRONTEND_URL.startswith("https://"):
-        config_status["warnings"].append("FRONTEND_URL should use HTTPS in production")
-    
-    # Check provider-specific configuration
-    if EMAIL_PROVIDER == "resend":
-        if not RESEND_API_KEY:
-            config_status["missing"].append("RESEND_API_KEY")
-    
-    elif EMAIL_PROVIDER == "sendgrid":
-        if not SENDGRID_API_KEY:
-            config_status["missing"].append("SENDGRID_API_KEY")
-    
-    elif EMAIL_PROVIDER == "smtp":
-        if not SMTP_HOST:
-            config_status["missing"].append("SMTP_HOST")
-        if not SMTP_USER or not SMTP_PASSWORD:
-            config_status["missing"].append("SMTP_USER or SMTP_PASSWORD")
-    
-    elif EMAIL_PROVIDER == "ses":
-        if not AWS_REGION:
-            config_status["missing"].append("AWS_REGION")
-    
-    config_status["configured"] = len(config_status["missing"]) == 0
-    
-    return config_status
-
-
 def get_email_provider_info() -> Dict[str, Any]:
     """Get information about the current email provider configuration."""
+    config = validate_email_config()
     return {
         "provider": EMAIL_PROVIDER,
         "from_email": FROM_EMAIL,
         "from_name": FROM_NAME,
         "frontend_url": FRONTEND_URL,
-        "is_configured": len([x for x in validate_email_config().get("missing", [])]) == 0
+        "is_configured": config["configured"],
+        "warnings": config["warnings"],
+        "missing": config["missing"]
     }
-
-
-# ============================================
-# INITIALIZATION
-# ============================================
 
 # Log configuration on import
 config_status = validate_email_config()
@@ -793,3 +742,6 @@ if not config_status["configured"]:
     logger.warning(f"Email service not fully configured. Missing: {config_status['missing']}")
 else:
     logger.info(f"Email service configured with provider: {EMAIL_PROVIDER}")
+    if config_status["warnings"]:
+        for w in config_status["warnings"]:
+            logger.warning(f"Email config warning: {w}")
