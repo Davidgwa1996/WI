@@ -165,12 +165,14 @@ app = FastAPI(
 
 
 # ============================================
-# CORS PREFLIGHT HANDLER (FIXES DELETE CORS)
+# CORS PREFLIGHT HANDLER – MUST BE FIRST
 # ============================================
 @app.options("/{path:path}")
 async def options_handler(request: Request):
-    """Handle CORS preflight for all routes, especially DELETE."""
+    """Handle CORS preflight for every route."""
     origin = request.headers.get("origin")
+    logger.info(f"OPTIONS request for {request.url.path} from origin {origin}")
+
     response = JSONResponse(content={}, status_code=200)
     if origin and origin in settings.get_cors_origins():
         response.headers["Access-Control-Allow-Origin"] = origin
@@ -181,6 +183,8 @@ async def options_handler(request: Request):
             "Content-Type, Origin, User-Agent, X-Requested-With, X-CSRF-Token"
         )
         response.headers["Access-Control-Max-Age"] = "86400"
+    else:
+        logger.warning(f"CORS preflight rejected – origin {origin} not allowed")
     return response
 
 
@@ -189,14 +193,11 @@ async def options_handler(request: Request):
 # ============================================
 @app.get("/health")
 async def simple_health():
-    """Railway/public health check endpoint. Must stay lightweight."""
     return {"status": "ok"}
-
 
 @app.get("/ping")
 async def ping():
     return {"pong": True, "timestamp": time.time()}
-
 
 @app.get("/api/v1/ping")
 async def api_ping():
@@ -216,65 +217,42 @@ async def test_create_invite(email: str, db: Session = Depends(get_db)):
         org = db.query(Organization).first()
         user = db.query(User).first()
         if not org or not user:
-            return {
-                "error": (
-                    f"No organization or user found. "
-                    f"Org: {org is not None}, User: {user is not None}"
-                )
-            }
+            return {"error": f"No org/user found. Org: {org is not None}, User: {user is not None}"}
         invite, invite_link = create_team_invite(
-            db=db,
-            organization_id=org.id,
-            invited_by_user_id=user.id,
-            email=email,
-            role="viewer",
+            db=db, organization_id=org.id, invited_by_user_id=user.id,
+            email=email, role="viewer",
         )
         return {
-            "success": True,
-            "invite_id": invite.id,
-            "invite_link": invite_link,
-            "token": invite.token,
-            "email": invite.email,
-            "role": invite.role,
-            "organization_id": invite.organization_id,
-            "expires_at": invite.expires_at.isoformat(),
+            "success": True, "invite_id": invite.id, "invite_link": invite_link,
+            "token": invite.token, "email": invite.email, "role": invite.role,
+            "organization_id": invite.organization_id, "expires_at": invite.expires_at.isoformat(),
         }
     except Exception as e:
         logger.error(f"Test create invite failed: {e}")
         return {"error": str(e)}
 
-
 @app.get("/test/send-email")
 async def test_send_email(email: str, db: Session = Depends(get_db)):
     from app.services.email import send_invite_email
     from app.models import Organization, User
-
     if db is None:
         return {"error": "Database not available"}
-
     org = db.query(Organization).first()
     user = db.query(User).first()
     if not org or not user:
-        return {"error": "No organization or user found for email context"}
-
+        return {"error": "No org/user for email context"}
     test_link = f"{settings.get_frontend_url()}/invite/test-token-123"
     result = send_invite_email(
-        email=email,
-        invite_link=test_link,
-        role="viewer",
-        invited_by=user.full_name,
-        organization_name=org.name,
-        expires_hours=72,
+        email=email, invite_link=test_link, role="viewer",
+        invited_by=user.full_name, organization_name=org.name, expires_hours=72
     )
     return {
-        "success": result,
-        "email": email,
+        "success": result, "email": email,
         "from_email": os.getenv("FROM_EMAIL", "not set"),
         "provider": os.getenv("EMAIL_PROVIDER", "not set"),
         "frontend_url": settings.get_frontend_url(),
         "invite_link": test_link,
     }
-
 
 @app.get("/test/db-status")
 async def test_db_status(db: Session = Depends(get_db)):
@@ -286,11 +264,8 @@ async def test_db_status(db: Session = Depends(get_db)):
         user_count = db.query(User).count()
         project_count = db.query(Project).count()
         return {
-            "success": True,
-            "database_connected": True,
-            "organizations": org_count,
-            "users": user_count,
-            "projects": project_count,
+            "success": True, "database_connected": True,
+            "organizations": org_count, "users": user_count, "projects": project_count,
         }
     except Exception as e:
         return {"error": str(e)}
@@ -313,7 +288,6 @@ async def list_all_routes():
         "invites_router_loaded": any("/invites" in r["path"] for r in routes),
     }
 
-
 @app.get("/debug/email-config")
 async def debug_email_config():
     return {
@@ -327,14 +301,13 @@ async def debug_email_config():
 
 
 # ============================================
-# CORS MIDDLEWARE
+# CORS MIDDLEWARE (still needed for actual responses)
 # ============================================
 allowed_origins = settings.get_cors_origins()
 netlify_url = "https://web3dkintel.netlify.app"
 if netlify_url not in allowed_origins:
     allowed_origins.append(netlify_url)
     logger.info(f"Added {netlify_url} to CORS origins")
-
 logger.info(f"Final CORS allowed origins: {allowed_origins}")
 
 app.add_middleware(
@@ -343,15 +316,8 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=[
-        "Accept",
-        "Accept-Language",
-        "Accept-Encoding",
-        "Authorization",
-        "Content-Type",
-        "Origin",
-        "User-Agent",
-        "X-Requested-With",
-        "X-CSRF-Token",
+        "Accept", "Accept-Language", "Accept-Encoding", "Authorization",
+        "Content-Type", "Origin", "User-Agent", "X-Requested-With", "X-CSRF-Token",
     ],
     expose_headers=["Content-Length", "X-Total-Count", "Content-Disposition"],
     max_age=86400,
@@ -364,23 +330,15 @@ app.add_middleware(
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     start_time = time.time()
-    logger.info(
-        f"Incoming: {request.method} {request.url.path} "
-        f"from {request.headers.get('origin', 'unknown')}"
-    )
+    logger.info(f"Incoming: {request.method} {request.url.path} from {request.headers.get('origin', 'unknown')}")
     try:
         response = await call_next(request)
         duration = time.time() - start_time
-        logger.info(
-            f"Response: {response.status_code} for {request.method} "
-            f"{request.url.path} ({duration:.3f}s)"
-        )
-
+        logger.info(f"Response: {response.status_code} for {request.method} {request.url.path} ({duration:.3f}s)")
         origin = request.headers.get("origin")
         if origin and origin in allowed_origins:
             response.headers["Access-Control-Allow-Origin"] = origin
             response.headers["Access-Control-Allow-Credentials"] = "true"
-
         return response
     except Exception as e:
         logger.error(f"Request failed: {request.method} {request.url.path} - {e}")
@@ -393,15 +351,7 @@ async def log_requests(request: Request, call_next):
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
-    return JSONResponse(
-        status_code=500,
-        content={
-            "detail": "Internal server error",
-            "path": str(request.url.path),
-            "method": request.method,
-        },
-    )
-
+    return JSONResponse(status_code=500, content={"detail": "Internal server error", "path": str(request.url.path), "method": request.method})
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
@@ -446,16 +396,9 @@ async def root():
         "cors_origins": allowed_origins,
     }
 
-
 @app.get(f"{settings.API_PREFIX}/health")
 async def health_check():
-    return {
-        "status": "healthy",
-        "timestamp": time.time(),
-        "app_name": settings.APP_NAME,
-        "environment": settings.APP_ENV,
-    }
-
+    return {"status": "healthy", "timestamp": time.time(), "app_name": settings.APP_NAME, "environment": settings.APP_ENV}
 
 @app.get(f"{settings.API_PREFIX}/health/detailed")
 async def detailed_health_check(db: Session = Depends(get_db)):
@@ -485,47 +428,30 @@ async def cors_test():
 # PROJECT ENDPOINTS
 # ============================================
 @app.get(f"{settings.API_PREFIX}/projects", response_model=list[schemas.ProjectOut])
-async def get_projects(
-    skip: int = 0,
-    limit: int = 100,
-    stage: str | None = None,
-    sector: str | None = None,
-    db: Session = Depends(get_db),
-):
+async def get_projects(skip: int = 0, limit: int = 100, stage: str | None = None, sector: str | None = None, db: Session = Depends(get_db)):
     if db is None:
         return []
-
     query = db.query(models.Project)
     if stage:
         query = query.filter(models.Project.stage == stage)
     if sector:
         query = query.filter(models.Project.sector == sector)
-
     return query.offset(skip).limit(limit).all()
 
-
 @app.get(f"{settings.API_PREFIX}/projects/summary", response_model=list[schemas.ProjectListItem])
-async def get_project_summaries(
-    skip: int = 0,
-    limit: int = 100,
-    db: Session = Depends(get_db),
-):
+async def get_project_summaries(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     if db is None:
         return []
     return db.query(models.Project).offset(skip).limit(limit).all()
-
 
 @app.get(f"{settings.API_PREFIX}/projects/{{project_id}}", response_model=schemas.ProjectOut)
 async def get_project(project_id: int, db: Session = Depends(get_db)):
     if db is None:
         raise HTTPException(status_code=503, detail="Database not available")
-
     project = db.query(models.Project).filter(models.Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-
     return project
-
 
 @app.post(f"{settings.API_PREFIX}/projects/refresh", response_model=schemas.ApiMessage)
 async def refresh_projects():
@@ -549,7 +475,6 @@ async def get_metrics(db: Session = Depends(get_db)):
             total_projects = db.query(models.Project).count()
         except Exception as e:
             logger.warning(f"Could not count projects: {e}")
-
     return {
         "app_name": settings.APP_NAME,
         "environment": settings.APP_ENV,
@@ -570,16 +495,12 @@ async def websocket_endpoint(websocket: WebSocket):
     if not settings.ENABLE_WEBSOCKETS:
         await websocket.close(code=1008, reason="WebSockets disabled")
         return
-
     await manager.connect(websocket)
     try:
         while True:
             data = await websocket.receive_text()
             if data == "ping":
-                await manager.send_personal_message(
-                    {"type": "pong", "timestamp": time.time()},
-                    websocket,
-                )
+                await manager.send_personal_message({"type": "pong", "timestamp": time.time()}, websocket)
     except WebSocketDisconnect:
         manager.disconnect(websocket)
     except Exception as e:
@@ -602,15 +523,8 @@ if settings.DEBUG:
 
 
 # ============================================
-# MAIN ENTRY POINT (for local execution)
+# MAIN ENTRY POINT
 # ============================================
 if __name__ == "__main__":
     import uvicorn
-
-    uvicorn.run(
-        "app.main:app",
-        host=settings.HOST,
-        port=settings.PORT,
-        reload=settings.DEBUG,
-        log_level="info",
-    )
+    uvicorn.run("app.main:app", host=settings.HOST, port=settings.PORT, reload=settings.DEBUG, log_level="info")
