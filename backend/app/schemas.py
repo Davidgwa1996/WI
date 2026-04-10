@@ -184,11 +184,11 @@ class ProjectBase(BaseModel):
     team_size: Optional[int] = 0
     funding_raised: Optional[float] = 0.0
 
-    llm_score: Optional[float] = 0.0
-    sentiment_score: Optional[float] = 0.0
-    momentum_score: Optional[float] = 0.0
-    funding_prediction: Optional[float] = 0.0
-    overall_score: Optional[float] = 0.0
+    llm_score: Optional[float] = 50.0  # Changed default to 50
+    sentiment_score: Optional[float] = 50.0
+    momentum_score: Optional[float] = 50.0
+    funding_prediction: Optional[float] = 50.0
+    overall_score: Optional[float] = 50.0
 
     twitter_followers: Optional[int] = 0
     twitter_follower_growth_30d: Optional[float] = 0.0
@@ -493,7 +493,7 @@ class WatchlistOut(BaseModel):
     description: Optional[str] = None
     is_default: bool
     settings: Optional[Dict[str, Any]] = None
-    projects_count: Optional[int] = None
+    projects_count: Optional[int] = 0  # Fixed: added default value
     created_by: Optional[int] = None
     created_at: datetime
     updated_at: datetime

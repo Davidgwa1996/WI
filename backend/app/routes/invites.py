@@ -11,13 +11,22 @@ from app.models import TeamInvite, User
 from app.schemas import InviteCreate, InviteOut, InviteAccept, TokenResponse, ApiMessage
 from app.services.audit import create_audit_log
 from app.services.invites import create_team_invite, accept_team_invite, get_invite_link, get_invite_by_token
-from app.services.email import send_invite_email, validate_email_config, get_email_provider_info
+from app.services.email import send_invite_email, send_welcome_email, validate_email_config, get_email_provider_info
 from app.config import settings
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/invites", tags=["invites"])
+
+
+# ============================================
+# CORS PREFLIGHT HANDLER
+# ============================================
+@router.options("/{path:path}")
+async def preflight_handler() -> dict:
+    """Handle CORS preflight requests for all invite endpoints."""
+    return {}
 
 
 @router.get("/", response_model=list[InviteOut])
@@ -138,11 +147,12 @@ def accept_invite(
     
     # Send welcome email in background
     if user.is_active:
+        organization_name = user.organization.name if user.organization else "Web3 Intel"
         background_tasks.add_task(
             send_welcome_email,
             email=user.email,
             user_name=user.full_name,
-            organization_name=user.organization.name if user.organization else "Web3 Intel"
+            organization_name=organization_name
         )
 
     # Generate access token for the user
@@ -184,6 +194,10 @@ def resend_invite(
     # Get organization name
     organization_name = current_user.organization.name if current_user.organization else "Web3 Intel"
     
+    # Calculate remaining hours
+    remaining_seconds = (invite.expires_at - datetime.utcnow()).total_seconds()
+    expires_hours = max(1, int(remaining_seconds / 3600))
+    
     # Resend email in background
     background_tasks.add_task(
         send_invite_email,
@@ -192,7 +206,7 @@ def resend_invite(
         role=invite.role,
         invited_by=current_user.full_name,
         organization_name=organization_name,
-        expires_hours=int((invite.expires_at - datetime.utcnow()).total_seconds() / 3600)
+        expires_hours=expires_hours
     )
     
     create_audit_log(
@@ -314,5 +328,16 @@ def get_invite_stats(
     }
 
 
-# Import send_welcome_email at the top or define it here
-from app.services.email import send_welcome_email
+# ============================================
+# OPTIONS HANDLER FOR ALL INVITE ROUTES
+# ============================================
+@router.options("/")
+@router.options("/check/{token}")
+@router.options("/accept")
+@router.options("/{invite_id}/resend")
+@router.options("/{invite_id}")
+@router.options("/config/status")
+@router.options("/stats")
+async def options_handler() -> dict:
+    """Handle OPTIONS requests for all invite endpoints."""
+    return {}
