@@ -62,10 +62,11 @@ from app.routes import (
 )
 from app.routes.uploads import router as uploads_router
 
+
 # ============================================
 # RETRY HELPER FOR DATABASE INITIALIZATION
 # ============================================
-async def init_db_with_retry(max_retries=5, delay=2):
+async def init_db_with_retry(max_retries: int = 5, delay: int = 2) -> bool:
     """Try to initialize the database several times before giving up."""
     for attempt in range(1, max_retries + 1):
         try:
@@ -81,12 +82,13 @@ async def init_db_with_retry(max_retries=5, delay=2):
                 return False
     return False
 
+
 # ============================================
-# LIFESPAN CONTEXT MANAGER (non‑crashing)
+# LIFESPAN CONTEXT MANAGER
 # ============================================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Handle startup and shutdown events without crashing the app."""
+    """Handle startup and shutdown events without blocking app readiness."""
     logger.info("=" * 50)
     logger.info(f"Starting {settings.APP_NAME}...")
     logger.info(f"Environment: {settings.APP_ENV}")
@@ -96,40 +98,56 @@ async def lifespan(app: FastAPI):
     logger.info(f"CORS Origins: {settings.get_cors_origins()}")
     logger.info("=" * 50)
 
-    # Database initialization (with retries)
-    db_ok = await init_db_with_retry()
-    if not db_ok:
-        logger.warning("Database not available – some endpoints may fail")
+    # Start database initialization in the background
+    try:
+        app.state.db_init_task = asyncio.create_task(init_db_with_retry())
+        logger.info("Database initialization scheduled in background")
+    except Exception as e:
+        logger.warning(f"Could not schedule database initialization: {e}")
 
-    # Redis pub/sub listener (non‑critical)
+    # Redis pub/sub listener (non-critical)
     if settings.ENABLE_REDIS and listen_to_events is not None:
         try:
-            asyncio.create_task(listen_to_events())
+            app.state.pubsub_task = asyncio.create_task(listen_to_events())
             logger.info("Redis pub/sub listener started")
         except Exception as e:
             logger.warning(f"Could not start pub/sub listener: {e}")
 
-    # Anomaly detection stream (non‑critical)
+    # Anomaly detection stream (non-critical)
     if detect_anomalies is not None:
         try:
-            asyncio.create_task(detect_anomalies())
+            app.state.anomaly_task = asyncio.create_task(detect_anomalies())
             logger.info("Anomaly detection stream started")
         except Exception as e:
             logger.warning(f"Could not start anomaly stream: {e}")
 
     # Validate configuration (warnings only)
-    validation = settings.validate_config()
-    if validation["warnings"]:
-        for warning in validation["warnings"]:
-            logger.warning(f"Config warning: {warning}")
-    if not validation["is_valid"]:
-        for issue in validation["issues"]:
-            logger.error(f"Config error: {issue}")
+    try:
+        validation = settings.validate_config()
+        if validation["warnings"]:
+            for warning in validation["warnings"]:
+                logger.warning(f"Config warning: {warning}")
+        if not validation["is_valid"]:
+            for issue in validation["issues"]:
+                logger.error(f"Config error: {issue}")
+    except Exception as e:
+        logger.warning(f"Configuration validation failed: {e}")
 
-    yield  # Application runs here
+    yield
 
-    # Shutdown
     logger.info("Shutting down application...")
+
+    # Cancel background tasks cleanly
+    for task_name in ("db_init_task", "pubsub_task", "anomaly_task"):
+        task = getattr(app.state, task_name, None)
+        if task and not task.done():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                logger.info(f"{task_name} cancelled cleanly")
+            except Exception as e:
+                logger.warning(f"Error while shutting down {task_name}: {e}")
 
 
 # ============================================
@@ -147,26 +165,27 @@ app = FastAPI(
 
 
 # ============================================
-# SIMPLE PUBLIC HEALTH ENDPOINT (NO DEPENDENCIES)
+# SIMPLE PUBLIC HEALTH ENDPOINTS
 # ============================================
 @app.get("/health")
 async def simple_health():
-    """Health check endpoint – always returns 200 OK, even if database is down."""
+    """Railway/public health check endpoint. Must stay lightweight."""
     return {"status": "ok"}
 
 
-# ============================================
-# DIRECT TEST ENDPOINTS (for debugging)
-# ============================================
 @app.get("/ping")
 async def ping():
     return {"pong": True, "timestamp": time.time()}
+
 
 @app.get("/api/v1/ping")
 async def api_ping():
     return {"pong": True, "timestamp": time.time()}
 
 
+# ============================================
+# TEST ENDPOINTS
+# ============================================
 @app.post("/test/create-invite")
 async def test_create_invite(email: str, db: Session = Depends(get_db)):
     from app.services.invites import create_team_invite
@@ -177,7 +196,12 @@ async def test_create_invite(email: str, db: Session = Depends(get_db)):
         org = db.query(Organization).first()
         user = db.query(User).first()
         if not org or not user:
-            return {"error": f"No organization or user found. Org: {org is not None}, User: {user is not None}"}
+            return {
+                "error": (
+                    f"No organization or user found. "
+                    f"Org: {org is not None}, User: {user is not None}"
+                )
+            }
         invite, invite_link = create_team_invite(
             db=db,
             organization_id=org.id,
@@ -204,12 +228,15 @@ async def test_create_invite(email: str, db: Session = Depends(get_db)):
 async def test_send_email(email: str, db: Session = Depends(get_db)):
     from app.services.email import send_invite_email
     from app.models import Organization, User
+
     if db is None:
         return {"error": "Database not available"}
+
     org = db.query(Organization).first()
     user = db.query(User).first()
     if not org or not user:
         return {"error": "No organization or user found for email context"}
+
     test_link = f"{settings.get_frontend_url()}/invite/test-token-123"
     result = send_invite_email(
         email=email,
@@ -217,7 +244,7 @@ async def test_send_email(email: str, db: Session = Depends(get_db)):
         role="viewer",
         invited_by=user.full_name,
         organization_name=org.name,
-        expires_hours=72
+        expires_hours=72,
     )
     return {
         "success": result,
@@ -225,7 +252,7 @@ async def test_send_email(email: str, db: Session = Depends(get_db)):
         "from_email": os.getenv("FROM_EMAIL", "not set"),
         "provider": os.getenv("EMAIL_PROVIDER", "not set"),
         "frontend_url": settings.get_frontend_url(),
-        "invite_link": test_link
+        "invite_link": test_link,
     }
 
 
@@ -258,12 +285,12 @@ async def list_all_routes():
     for route in app.routes:
         routes.append({
             "path": route.path,
-            "methods": list(route.methods) if hasattr(route, 'methods') else [],
+            "methods": list(route.methods) if hasattr(route, "methods") else [],
         })
     return {
         "total": len(routes),
         "routes": routes,
-        "invites_router_loaded": any("/invites" in r["path"] for r in routes)
+        "invites_router_loaded": any("/invites" in r["path"] for r in routes),
     }
 
 
@@ -287,6 +314,7 @@ netlify_url = "https://web3dkintel.netlify.app"
 if netlify_url not in allowed_origins:
     allowed_origins.append(netlify_url)
     logger.info(f"Added {netlify_url} to CORS origins")
+
 logger.info(f"Final CORS allowed origins: {allowed_origins}")
 
 app.add_middleware(
@@ -316,15 +344,23 @@ app.add_middleware(
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     start_time = time.time()
-    logger.info(f"Incoming: {request.method} {request.url.path} from {request.headers.get('origin', 'unknown')}")
+    logger.info(
+        f"Incoming: {request.method} {request.url.path} "
+        f"from {request.headers.get('origin', 'unknown')}"
+    )
     try:
         response = await call_next(request)
         duration = time.time() - start_time
-        logger.info(f"Response: {response.status_code} for {request.method} {request.url.path} ({duration:.3f}s)")
+        logger.info(
+            f"Response: {response.status_code} for {request.method} "
+            f"{request.url.path} ({duration:.3f}s)"
+        )
+
         origin = request.headers.get("origin")
         if origin and origin in allowed_origins:
             response.headers["Access-Control-Allow-Origin"] = origin
             response.headers["Access-Control-Allow-Credentials"] = "true"
+
         return response
     except Exception as e:
         logger.error(f"Request failed: {request.method} {request.url.path} - {e}")
@@ -337,7 +373,15 @@ async def log_requests(request: Request, call_next):
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
-    return JSONResponse(status_code=500, content={"detail": "Internal server error", "path": str(request.url.path), "method": request.method})
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "Internal server error",
+            "path": str(request.url.path),
+            "method": request.method,
+        },
+    )
+
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
@@ -367,7 +411,7 @@ app.include_router(uploads_router, prefix=settings.API_PREFIX, tags=["Uploads"])
 
 
 # ============================================
-# ROOT AND ADDITIONAL HEALTH ENDPOINTS
+# ROOT AND HEALTH ENDPOINTS
 # ============================================
 @app.get("/")
 async def root():
@@ -385,7 +429,12 @@ async def root():
 
 @app.get(f"{settings.API_PREFIX}/health")
 async def health_check():
-    return {"status": "healthy", "timestamp": time.time(), "app_name": settings.APP_NAME, "environment": settings.APP_ENV}
+    return {
+        "status": "healthy",
+        "timestamp": time.time(),
+        "app_name": settings.APP_NAME,
+        "environment": settings.APP_ENV,
+    }
 
 
 @app.get(f"{settings.API_PREFIX}/health/detailed")
@@ -416,30 +465,47 @@ async def cors_test():
 # PROJECT ENDPOINTS
 # ============================================
 @app.get(f"{settings.API_PREFIX}/projects", response_model=list[schemas.ProjectOut])
-async def get_projects(skip: int = 0, limit: int = 100, stage: str | None = None, sector: str | None = None, db: Session = Depends(get_db)):
+async def get_projects(
+    skip: int = 0,
+    limit: int = 100,
+    stage: str | None = None,
+    sector: str | None = None,
+    db: Session = Depends(get_db),
+):
     if db is None:
         return []
+
     query = db.query(models.Project)
     if stage:
         query = query.filter(models.Project.stage == stage)
     if sector:
         query = query.filter(models.Project.sector == sector)
+
     return query.offset(skip).limit(limit).all()
 
+
 @app.get(f"{settings.API_PREFIX}/projects/summary", response_model=list[schemas.ProjectListItem])
-async def get_project_summaries(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+async def get_project_summaries(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+):
     if db is None:
         return []
     return db.query(models.Project).offset(skip).limit(limit).all()
+
 
 @app.get(f"{settings.API_PREFIX}/projects/{{project_id}}", response_model=schemas.ProjectOut)
 async def get_project(project_id: int, db: Session = Depends(get_db)):
     if db is None:
         raise HTTPException(status_code=503, detail="Database not available")
+
     project = db.query(models.Project).filter(models.Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+
     return project
+
 
 @app.post(f"{settings.API_PREFIX}/projects/refresh", response_model=schemas.ApiMessage)
 async def refresh_projects():
@@ -463,6 +529,7 @@ async def get_metrics(db: Session = Depends(get_db)):
             total_projects = db.query(models.Project).count()
         except Exception as e:
             logger.warning(f"Could not count projects: {e}")
+
     return {
         "app_name": settings.APP_NAME,
         "environment": settings.APP_ENV,
@@ -483,12 +550,16 @@ async def websocket_endpoint(websocket: WebSocket):
     if not settings.ENABLE_WEBSOCKETS:
         await websocket.close(code=1008, reason="WebSockets disabled")
         return
+
     await manager.connect(websocket)
     try:
         while True:
             data = await websocket.receive_text()
             if data == "ping":
-                await manager.send_personal_message({"type": "pong", "timestamp": time.time()}, websocket)
+                await manager.send_personal_message(
+                    {"type": "pong", "timestamp": time.time()},
+                    websocket,
+                )
     except WebSocketDisconnect:
         manager.disconnect(websocket)
     except Exception as e:
@@ -515,4 +586,11 @@ if settings.DEBUG:
 # ============================================
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app.main:app", host=settings.HOST, port=settings.PORT, reload=settings.DEBUG, log_level="info")
+
+    uvicorn.run(
+        "app.main:app",
+        host=settings.HOST,
+        port=settings.PORT,
+        reload=settings.DEBUG,
+        log_level="info",
+    )

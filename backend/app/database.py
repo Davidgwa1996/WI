@@ -1,18 +1,22 @@
 ﻿from __future__ import annotations
 
-import time
 import logging
+from threading import Lock
+from typing import Optional
+
 from sqlalchemy import create_engine, text, inspect
 from sqlalchemy.orm import sessionmaker
 from app.config import settings
 
-# Configure logging
 logger = logging.getLogger(__name__)
 
 engine = None
 SessionLocal = None
 mongo_db = None
 mongo_client = None
+
+_engine_lock = Lock()
+_mongo_lock = Lock()
 
 
 def _normalize_database_url(url: str) -> str:
@@ -24,109 +28,163 @@ def _normalize_database_url(url: str) -> str:
     return url
 
 
-def _retry_call(func, max_attempts=3, delay=2, *args, **kwargs):
-    """Retry a function call with exponential backoff."""
-    last_exception = None
-    for attempt in range(1, max_attempts + 1):
-        try:
-            return func(*args, **kwargs)
-        except Exception as e:
-            last_exception = e
-            logger.warning(f"Attempt {attempt}/{max_attempts} failed: {e}")
-            if attempt < max_attempts:
-                time.sleep(delay * attempt)  # linear backoff
-    raise last_exception
-
-
-def _build_engine():
-    """Create and test database engine with retries."""
+def _create_engine_instance():
+    """Create a SQLAlchemy engine with sensible connection timeouts."""
     if not settings.DATABASE_URL:
-        logger.error("DATABASE_URL is not set in environment variables")
+        logger.warning("DATABASE_URL is not set")
         return None
 
-    def _create():
-        database_url = _normalize_database_url(settings.DATABASE_URL)
-        connect_args = {}
-        if database_url.startswith("sqlite"):
-            connect_args["check_same_thread"] = False
+    database_url = _normalize_database_url(settings.DATABASE_URL)
+    connect_args = {}
 
-        engine_instance = create_engine(
-            database_url,
-            pool_pre_ping=True,
-            pool_recycle=300,
-            pool_size=10,
-            max_overflow=20,
-            future=True,
-            connect_args=connect_args,
-        )
-        # Test connection
-        with engine_instance.connect() as conn:
-            conn.execute(text("SELECT 1"))
-        return engine_instance
+    if database_url.startswith("sqlite"):
+        connect_args["check_same_thread"] = False
+    elif database_url.startswith("postgresql"):
+        # Keep failed DB connections from hanging startup too long
+        connect_args["connect_timeout"] = 5
+        # Railway/managed Postgres often needs SSL depending on setup.
+        # Uncomment the next line if your provider requires SSL:
+        # connect_args["sslmode"] = "require"
+
+    engine_instance = create_engine(
+        database_url,
+        pool_pre_ping=True,
+        pool_recycle=300,
+        future=True,
+        connect_args=connect_args,
+    )
+    return engine_instance
+
+
+def get_engine():
+    """Lazily create and cache the SQLAlchemy engine."""
+    global engine
+
+    if engine is not None:
+        return engine
+
+    with _engine_lock:
+        if engine is not None:
+            return engine
+
+        try:
+            engine = _create_engine_instance()
+            if engine is None:
+                return None
+
+            # Quick health probe
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+
+            logger.info("PostgreSQL engine created successfully")
+            return engine
+        except Exception as e:
+            logger.error(f"Failed to create PostgreSQL engine: {e}")
+            engine = None
+            return None
+
+
+def get_session_factory():
+    """Lazily create and cache the SQLAlchemy session factory."""
+    global SessionLocal
+
+    if SessionLocal is not None:
+        return SessionLocal
+
+    db_engine = get_engine()
+    if db_engine is None:
+        return None
 
     try:
-        engine_instance = _retry_call(_create, max_attempts=5, delay=2)
-        logger.info("PostgreSQL engine created successfully")
-        return engine_instance
+        SessionLocal = sessionmaker(
+            autocommit=False,
+            autoflush=False,
+            bind=db_engine,
+            future=True,
+        )
+        logger.info("PostgreSQL session factory created successfully")
+        return SessionLocal
     except Exception as e:
-        logger.error(f"PostgreSQL engine creation failed after retries: {e}")
+        logger.error(f"Failed to create session factory: {e}")
+        SessionLocal = None
         return None
 
 
 def _ensure_missing_columns():
-    """Add missing columns to existing tables (for schema evolution)."""
-    if engine is None:
+    """Add missing columns to existing tables for schema evolution."""
+    db_engine = get_engine()
+    if db_engine is None:
+        logger.warning("Skipping schema patching because engine is unavailable")
         return
+
     try:
-        inspector = inspect(engine)
-        with engine.connect() as conn:
+        inspector = inspect(db_engine)
+
+        with db_engine.connect() as conn:
             # Watchlists table
             if "watchlists" in inspector.get_table_names():
                 columns = [col["name"] for col in inspector.get_columns("watchlists")]
+
                 if "created_by" not in columns:
                     logger.info("Adding missing column: watchlists.created_by")
                     conn.execute(text(
-                        "ALTER TABLE watchlists ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES users(id)"
+                        "ALTER TABLE watchlists "
+                        "ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES users(id)"
                     ))
+
                 if "settings" not in columns:
                     logger.info("Adding missing column: watchlists.settings")
                     conn.execute(text(
-                        "ALTER TABLE watchlists ADD COLUMN IF NOT EXISTS settings JSONB DEFAULT '{\"alert_on_change\": true, \"alert_threshold\": 5.0, \"notification_channels\": [\"in_app\"]}'"
+                        "ALTER TABLE watchlists "
+                        "ADD COLUMN IF NOT EXISTS settings JSONB "
+                        "DEFAULT '{\"alert_on_change\": true, "
+                        "\"alert_threshold\": 5.0, "
+                        "\"notification_channels\": [\"in_app\"]}'"
                     ))
+
                 conn.commit()
 
             # Projects table
             if "projects" in inspector.get_table_names():
                 project_columns = [col["name"] for col in inspector.get_columns("projects")]
+
                 if "is_featured" not in project_columns:
                     logger.info("Adding missing column: projects.is_featured")
                     conn.execute(text(
-                        "ALTER TABLE projects ADD COLUMN IF NOT EXISTS is_featured BOOLEAN DEFAULT FALSE"
+                        "ALTER TABLE projects "
+                        "ADD COLUMN IF NOT EXISTS is_featured BOOLEAN DEFAULT FALSE"
                     ))
+
                 if "anomaly_score" not in project_columns:
                     logger.info("Adding missing column: projects.anomaly_score")
                     conn.execute(text(
-                        "ALTER TABLE projects ADD COLUMN IF NOT EXISTS anomaly_score FLOAT DEFAULT 0.0"
+                        "ALTER TABLE projects "
+                        "ADD COLUMN IF NOT EXISTS anomaly_score FLOAT DEFAULT 0.0"
                     ))
+
                 conn.commit()
 
             # Project history
             if "project_history" in inspector.get_table_names():
                 history_columns = [col["name"] for col in inspector.get_columns("project_history")]
+
                 if "trigger_source" not in history_columns:
                     logger.info("Adding missing column: project_history.trigger_source")
                     conn.execute(text(
-                        "ALTER TABLE project_history ADD COLUMN IF NOT EXISTS trigger_source VARCHAR(50) DEFAULT 'scraper'"
+                        "ALTER TABLE project_history "
+                        "ADD COLUMN IF NOT EXISTS trigger_source VARCHAR(50) DEFAULT 'scraper'"
                     ))
                     conn.commit()
 
             # Team invites
             if "team_invites" in inspector.get_table_names():
                 invite_columns = [col["name"] for col in inspector.get_columns("team_invites")]
+
                 if "accepted_at" not in invite_columns:
                     logger.info("Adding missing column: team_invites.accepted_at")
                     conn.execute(text(
-                        "ALTER TABLE team_invites ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMP"
+                        "ALTER TABLE team_invites "
+                        "ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMP"
                     ))
                     conn.commit()
 
@@ -134,62 +192,34 @@ def _ensure_missing_columns():
         logger.warning(f"Could not ensure missing columns: {e}")
 
 
-# Create engine (with retries)
-engine = _build_engine()
+def init_db():
+    """Initialize database tables and ensure schema is up to date."""
+    db_engine = get_engine()
+    if db_engine is None:
+        logger.warning("Database initialization skipped because engine is unavailable")
+        return
 
-if engine is not None:
     try:
-        SessionLocal = sessionmaker(
-            autocommit=False,
-            autoflush=False,
-            bind=engine,
-            future=True,
-        )
-        logger.info("PostgreSQL session factory created successfully")
+        from app.models import Base
+
+        Base.metadata.create_all(bind=db_engine)
+        logger.info("PostgreSQL tables initialized successfully")
+
         _ensure_missing_columns()
     except Exception as e:
-        logger.error(f"PostgreSQL session setup failed: {e}")
-        SessionLocal = None
-else:
-    logger.warning("SessionLocal not created because engine is unavailable")
-
-
-# MongoDB connection (no retry – optional)
-if settings.MONGODB_URL:
-    try:
-        from pymongo import MongoClient
-        from urllib.parse import urlparse
-
-        mongo_client = MongoClient(
-            settings.MONGODB_URL,
-            serverSelectionTimeoutMS=5000,
-            connectTimeoutMS=5000,
-            socketTimeoutMS=5000,
-        )
-        parsed_url = urlparse(settings.MONGODB_URL)
-        db_name = parsed_url.path.lstrip("/") or "web3_intel"
-        mongo_db = mongo_client[db_name]
-        mongo_client.admin.command("ping")
-        logger.info(f"MongoDB connected successfully to database: {db_name}")
-    except ImportError:
-        logger.warning("pymongo not installed. MongoDB features disabled.")
-        mongo_db = None
-        mongo_client = None
-    except Exception as e:
-        logger.warning(f"MongoDB connection failed: {e}")
-        mongo_db = None
-        mongo_client = None
-else:
-    logger.info("MONGODB_URL not set. MongoDB features disabled.")
+        logger.error(f"Database initialization failed: {e}")
+        raise
 
 
 def get_db():
     """Dependency to get database session."""
-    if SessionLocal is None:
-        logger.error("Database session factory not available")
+    session_factory = get_session_factory()
+    if session_factory is None:
+        logger.warning("Database session factory not available")
         yield None
         return
-    db = SessionLocal()
+
+    db = session_factory()
     try:
         yield db
     except Exception as e:
@@ -200,36 +230,65 @@ def get_db():
         db.close()
 
 
+def init_mongo():
+    """Initialize MongoDB lazily. Optional service."""
+    global mongo_client, mongo_db
+
+    if mongo_client is not None and mongo_db is not None:
+        return mongo_db
+
+    if not settings.MONGODB_URL:
+        logger.info("MONGODB_URL not set. MongoDB features disabled.")
+        return None
+
+    with _mongo_lock:
+        if mongo_client is not None and mongo_db is not None:
+            return mongo_db
+
+        try:
+            from pymongo import MongoClient
+            from urllib.parse import urlparse
+
+            mongo_client = MongoClient(
+                settings.MONGODB_URL,
+                serverSelectionTimeoutMS=5000,
+                connectTimeoutMS=5000,
+                socketTimeoutMS=5000,
+            )
+
+            parsed_url = urlparse(settings.MONGODB_URL)
+            db_name = parsed_url.path.lstrip("/") or "web3_intel"
+            mongo_db = mongo_client[db_name]
+
+            mongo_client.admin.command("ping")
+            logger.info(f"MongoDB connected successfully to database: {db_name}")
+            return mongo_db
+
+        except ImportError:
+            logger.warning("pymongo not installed. MongoDB features disabled.")
+            mongo_client = None
+            mongo_db = None
+            return None
+        except Exception as e:
+            logger.warning(f"MongoDB connection failed: {e}")
+            mongo_client = None
+            mongo_db = None
+            return None
+
+
 def get_mongo_db():
     """Get MongoDB database instance."""
-    return mongo_db
-
-
-def init_db():
-    """Initialize database tables and ensure schema is up to date (with retries)."""
-    if engine is None:
-        logger.warning("Database initialization skipped because engine is unavailable")
-        return
-
-    def _init():
-        from app.models import Base
-        Base.metadata.create_all(bind=engine)
-        logger.info("PostgreSQL tables initialized successfully")
-        _ensure_missing_columns()
-
-    try:
-        _retry_call(_init, max_attempts=5, delay=2)
-    except Exception as e:
-        logger.error(f"Database initialization failed after retries: {e}")
-        raise
+    return init_mongo()
 
 
 def check_db_connection() -> bool:
     """Check if database connection is healthy."""
-    if engine is None:
+    db_engine = get_engine()
+    if db_engine is None:
         return False
+
     try:
-        with engine.connect() as conn:
+        with db_engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         return True
     except Exception as e:
@@ -239,29 +298,35 @@ def check_db_connection() -> bool:
 
 def get_db_status() -> dict:
     """Get detailed database status for health checks."""
+    db_engine = get_engine()
+    mongo = get_mongo_db()
+
     status = {
         "postgresql": {
             "connected": False,
-            "engine_available": engine is not None,
-            "session_available": SessionLocal is not None,
+            "engine_available": db_engine is not None,
+            "session_available": get_session_factory() is not None,
         },
         "mongodb": {
             "connected": False,
             "client_available": mongo_client is not None,
-            "db_available": mongo_db is not None,
-        }
+            "db_available": mongo is not None,
+        },
     }
-    if engine is not None:
+
+    if db_engine is not None:
         try:
-            with engine.connect() as conn:
+            with db_engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
             status["postgresql"]["connected"] = True
         except Exception:
             pass
+
     if mongo_client is not None:
         try:
             mongo_client.admin.command("ping")
             status["mongodb"]["connected"] = True
         except Exception:
             pass
+
     return status
