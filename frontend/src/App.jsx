@@ -32,6 +32,7 @@ import BillingCancel from "./pages/BillingCancel";
 import AuditLogs from "./pages/AuditLogs";
 import AdminRoles from "./pages/AdminRoles";
 import ApiDocsPage from "./pages/ApiDocsPage";
+import Organizations from "./pages/Organizations";  // ✅ New import
 
 import ErrorBoundary from "./components/ErrorBoundary";
 import "./index.css";
@@ -228,6 +229,16 @@ function App() {
               element={
                 <ProtectedRoute>
                   <ApiDocsPage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* ✅ New Organizations route – only visible to owners (inside the page we enforce role) */}
+            <Route
+              path="/organizations"
+              element={
+                <ProtectedRoute>
+                  <Organizations />
                 </ProtectedRoute>
               }
             />

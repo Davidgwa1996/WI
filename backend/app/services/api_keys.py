@@ -1,8 +1,9 @@
 import hashlib
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import List, Optional
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import SQLAlchemyError  # ✅ fixed typo
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.models import APIKey
 
@@ -57,7 +58,26 @@ def create_api_key(db: Session, organization_id: int, name: str) -> tuple[APIKey
         raise
 
 
-def get_api_key_by_prefix(db: Session, key_prefix: str) -> APIKey | None:
+def list_api_keys(db: Session, organization_id: int) -> List[APIKey]:
+    """
+    List all API keys for an organization (active and inactive).
+    """
+    return db.query(APIKey).filter(
+        APIKey.organization_id == organization_id
+    ).order_by(APIKey.created_at.desc()).all()
+
+
+def get_api_key_by_id(db: Session, api_key_id: int, organization_id: int) -> Optional[APIKey]:
+    """
+    Retrieve an API key by its ID, ensuring it belongs to the given organization.
+    """
+    return db.query(APIKey).filter(
+        APIKey.id == api_key_id,
+        APIKey.organization_id == organization_id
+    ).first()
+
+
+def get_api_key_by_prefix(db: Session, key_prefix: str) -> Optional[APIKey]:
     """Retrieve an API key by its prefix (first 12 characters)."""
     return db.query(APIKey).filter(APIKey.key_prefix == key_prefix).first()
 
@@ -69,11 +89,7 @@ def revoke_api_key(db: Session, api_key_id: int, organization_id: int) -> bool:
     Returns:
         bool: True if revoked, False if not found or already inactive
     """
-    api_key = db.query(APIKey).filter(
-        APIKey.id == api_key_id,
-        APIKey.organization_id == organization_id
-    ).first()
-    
+    api_key = get_api_key_by_id(db, api_key_id, organization_id)
     if not api_key or not api_key.is_active:
         return False
     
@@ -83,7 +99,7 @@ def revoke_api_key(db: Session, api_key_id: int, organization_id: int) -> bool:
     return True
 
 
-def validate_api_key(db: Session, raw_key: str) -> APIKey | None:
+def validate_api_key(db: Session, raw_key: str) -> Optional[APIKey]:
     """
     Validate an API key by its hash.
     
@@ -95,7 +111,7 @@ def validate_api_key(db: Session, raw_key: str) -> APIKey | None:
     
     if api_key and api_key.is_active:
         # Update last_used_at timestamp
-        api_key.last_used_at = datetime.utcnow()
+        api_key.last_used_at = datetime.now(timezone.utc)
         db.commit()
         return api_key
     return None

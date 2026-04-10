@@ -483,7 +483,6 @@ export const orgAPI = {
   updateSettings: (payload) => fetchAPI("/organizations/settings", { method: "PUT", body: payload, useCache: false }),
   delete: (orgId) => fetchAPI(`/organizations/${orgId}`, { method: "DELETE", useCache: false }),
   bulkDelete: (payload) => fetchAPI("/organizations/bulk-delete", { method: "DELETE", body: payload, useCache: false }),
-  // ✅ FIXED: Now calls the actual backend endpoint /organizations/all
   listAll: () => fetchAPI("/organizations/all", { useCache: false }),
 };
 
