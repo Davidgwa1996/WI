@@ -128,6 +128,90 @@ app = FastAPI(
 
 
 # ============================================
+# DIRECT TEST ENDPOINTS (bypass all routers)
+# ============================================
+
+@app.get("/ping")
+async def ping():
+    """Simple test endpoint to verify the app is running."""
+    return {"pong": True, "timestamp": time.time()}
+
+
+@app.get("/api/v1/ping")
+async def api_ping():
+    """Simple test endpoint to verify API prefix works."""
+    return {"pong": True, "timestamp": time.time()}
+
+
+@app.post("/test/create-invite")
+async def test_create_invite(
+    email: str,
+    db: Session = Depends(get_db),
+):
+    """Test endpoint to create an invite directly (bypasses invites router)."""
+    from app.services.invites import create_team_invite
+    
+    if db is None:
+        return {"error": "Database not available"}
+    
+    try:
+        # Get first organization and user for testing
+        from app.models import Organization, User
+        
+        org = db.query(Organization).first()
+        user = db.query(User).first()
+        
+        if not org or not user:
+            return {"error": f"No organization or user found. Org: {org is not None}, User: {user is not None}"}
+        
+        invite, invite_link = create_team_invite(
+            db=db,
+            organization_id=org.id,
+            invited_by_user_id=user.id,
+            email=email,
+            role="viewer",
+        )
+        
+        return {
+            "success": True,
+            "invite_id": invite.id,
+            "invite_link": invite_link,
+            "token": invite.token,
+            "email": invite.email,
+            "role": invite.role,
+            "organization_id": invite.organization_id,
+            "expires_at": invite.expires_at.isoformat(),
+        }
+    except Exception as e:
+        logger.error(f"Test create invite failed: {e}")
+        return {"error": str(e)}
+
+
+@app.get("/test/db-status")
+async def test_db_status(db: Session = Depends(get_db)):
+    """Test database connection and show basic info."""
+    if db is None:
+        return {"error": "Database not available"}
+    
+    try:
+        from app.models import Organization, User, Project
+        
+        org_count = db.query(Organization).count()
+        user_count = db.query(User).count()
+        project_count = db.query(Project).count()
+        
+        return {
+            "success": True,
+            "database_connected": True,
+            "organizations": org_count,
+            "users": user_count,
+            "projects": project_count,
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+# ============================================
 # DEBUG ROUTES ENDPOINT
 # ============================================
 @app.get("/debug/routes")
@@ -139,7 +223,11 @@ async def list_all_routes():
             "path": route.path,
             "methods": list(route.methods) if hasattr(route, 'methods') else [],
         })
-    return {"total": len(routes), "routes": routes}
+    return {
+        "total": len(routes),
+        "routes": routes,
+        "invites_router_loaded": any("/invites" in r["path"] for r in routes)
+    }
 
 
 # ============================================
