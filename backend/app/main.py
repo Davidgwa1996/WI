@@ -187,6 +187,51 @@ async def test_create_invite(
         return {"error": str(e)}
 
 
+@app.get("/test/send-email")
+async def test_send_email(
+    email: str,
+    db: Session = Depends(get_db),
+):
+    """
+    Test endpoint to send an email directly.
+    Use this to debug email configuration.
+    Example: /test/send-email?email=test@example.com
+    """
+    from app.services.email import send_invite_email
+    from app.models import Organization, User
+    
+    if db is None:
+        return {"error": "Database not available"}
+    
+    # Get first organization and user for context
+    org = db.query(Organization).first()
+    user = db.query(User).first()
+    
+    if not org or not user:
+        return {"error": "No organization or user found for email context"}
+    
+    # Create a test invite link
+    test_link = f"{settings.get_frontend_url()}/invite/test-token-123"
+    
+    result = send_invite_email(
+        email=email,
+        invite_link=test_link,
+        role="viewer",
+        invited_by=user.full_name,
+        organization_name=org.name,
+        expires_hours=72
+    )
+    
+    return {
+        "success": result,
+        "email": email,
+        "from_email": settings.SMTP_FROM_EMAIL or os.getenv("FROM_EMAIL"),
+        "provider": os.getenv("EMAIL_PROVIDER", "not set"),
+        "frontend_url": settings.get_frontend_url(),
+        "invite_link": test_link
+    }
+
+
 @app.get("/test/db-status")
 async def test_db_status(db: Session = Depends(get_db)):
     """Test database connection and show basic info."""
@@ -227,6 +272,20 @@ async def list_all_routes():
         "total": len(routes),
         "routes": routes,
         "invites_router_loaded": any("/invites" in r["path"] for r in routes)
+    }
+
+
+@app.get("/debug/email-config")
+async def debug_email_config():
+    """Show email configuration (without exposing secrets)."""
+    import os
+    return {
+        "provider": os.getenv("EMAIL_PROVIDER", "not set"),
+        "from_email": os.getenv("FROM_EMAIL", "not set"),
+        "from_name": os.getenv("FROM_NAME", "not set"),
+        "frontend_url": settings.get_frontend_url(),
+        "resend_api_key_set": bool(os.getenv("RESEND_API_KEY")),
+        "smtp_host_set": bool(os.getenv("SMTP_HOST")),
     }
 
 
