@@ -33,6 +33,14 @@ def validate_slug(value: str) -> str:
     return value
 
 
+def validate_role(value: str) -> str:
+    """Validate user role."""
+    valid_roles = ["owner", "admin", "analyst", "member", "viewer"]
+    if value not in valid_roles:
+        raise ValueError(f"Role must be one of: {', '.join(valid_roles)}")
+    return value
+
+
 # ------------------------------------------------------------
 # Generic / common
 # ------------------------------------------------------------
@@ -165,6 +173,13 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     role: Optional[str] = None
     is_active: Optional[bool] = None
+    
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, value: Optional[str]) -> Optional[str]:
+        if value:
+            return validate_role(value)
+        return value
 
 
 # ------------------------------------------------------------
@@ -184,7 +199,7 @@ class ProjectBase(BaseModel):
     team_size: Optional[int] = 0
     funding_raised: Optional[float] = 0.0
 
-    llm_score: Optional[float] = 50.0  # Changed default to 50
+    llm_score: Optional[float] = 50.0
     sentiment_score: Optional[float] = 50.0
     momentum_score: Optional[float] = 50.0
     funding_prediction: Optional[float] = 50.0
@@ -355,11 +370,19 @@ class AuditLogOut(BaseModel):
 
 
 # ------------------------------------------------------------
-# Invites
+# Invites (Updated with analyst role)
 # ------------------------------------------------------------
 class InviteCreate(BaseModel):
     email: EmailStr
     role: str = "viewer"
+    
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, value: str) -> str:
+        valid_roles = ["owner", "admin", "analyst", "member", "viewer"]
+        if value not in valid_roles:
+            raise ValueError(f"Role must be one of: {', '.join(valid_roles)}")
+        return value
 
 
 class InviteOut(BaseModel):
@@ -493,7 +516,7 @@ class WatchlistOut(BaseModel):
     description: Optional[str] = None
     is_default: bool
     settings: Optional[Dict[str, Any]] = None
-    projects_count: Optional[int] = 0  # Fixed: added default value
+    projects_count: Optional[int] = 0
     created_by: Optional[int] = None
     created_at: datetime
     updated_at: datetime

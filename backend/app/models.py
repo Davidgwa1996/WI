@@ -69,7 +69,8 @@ class User(Base, TimestampMixin):
     email = Column(String(255), nullable=False, unique=True, index=True)
     password_hash = Column(String(255), nullable=False)
 
-    role = Column(String(50), default="viewer", nullable=False)  # owner, admin, analyst, viewer
+    # Updated role comment to include analyst
+    role = Column(String(50), default="viewer", nullable=False)  # owner, admin, analyst, member, viewer
     is_active = Column(Boolean, default=True, nullable=False)
     is_verified = Column(Boolean, default=False, nullable=False)
     last_login_at = Column(DateTime, nullable=True)
@@ -158,7 +159,8 @@ class TeamInvite(Base, TimestampMixin):
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
 
     email = Column(String(255), nullable=False, index=True)
-    role = Column(String(50), default="viewer", nullable=False)
+    # Updated comment to include analyst
+    role = Column(String(50), default="viewer", nullable=False)  # owner, admin, analyst, member, viewer
     token = Column(String(255), nullable=False, unique=True, index=True)
     invited_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     is_accepted = Column(Boolean, default=False, nullable=False)
@@ -203,7 +205,7 @@ class Project(Base, TimestampMixin):
     tvl = Column(Float, default=0.0)
 
     # AI scores
-    llm_score = Column(Float, default=50.0)  # Changed from 0.0 to 50.0
+    llm_score = Column(Float, default=50.0)
     sentiment_score = Column(Float, default=50.0)
     funding_prediction = Column(Float, default=50.0)
     momentum_score = Column(Float, default=50.0)

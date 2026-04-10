@@ -44,7 +44,7 @@ def create_team_invite(
         organization_id: ID of the organization
         invited_by_user_id: ID of the user sending the invite (can be None for system invites)
         email: Email address of the invitee
-        role: Role to assign (admin, member, viewer, etc.)
+        role: Role to assign (admin, analyst, member, viewer, owner)
         expires_hours: Number of hours until the invite expires (default: 72)
     
     Returns:
@@ -57,7 +57,8 @@ def create_team_invite(
     if not email or "@" not in email:
         raise ValueError(f"Invalid email address: {email}")
     
-    valid_roles = ["admin", "member", "viewer", "owner"]
+    # Updated valid roles to include 'analyst'
+    valid_roles = ["admin", "analyst", "member", "viewer", "owner"]
     if role not in valid_roles:
         raise ValueError(f"Invalid role: {role}. Must be one of {valid_roles}")
     
