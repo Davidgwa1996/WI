@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import Response
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -11,6 +12,18 @@ from app.schemas import ApiMessage, TokenResponse, UserLogin, UserRegister
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+# ============================================
+# CORS PREFLIGHT HANDLER (Fixes 405 on OPTIONS)
+# ============================================
+@router.options("/{path:path}")
+async def preflight_handler() -> Response:
+    """Handle CORS preflight requests for all auth endpoints."""
+    return Response(status_code=200)
+
+
+# ============================================
+# REGISTER ENDPOINT
+# ============================================
 @router.post(
     "/register",
     response_model=ApiMessage,
@@ -73,6 +86,9 @@ def register(payload: UserRegister, db: Session = Depends(get_db)):
         )
 
 
+# ============================================
+# LOGIN ENDPOINT
+# ============================================
 @router.post("/login", response_model=TokenResponse)
 def login(payload: UserLogin, db: Session = Depends(get_db)):
     if db is None:
