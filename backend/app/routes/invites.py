@@ -44,7 +44,11 @@ async def preflight_handler() -> dict:
     return {}
 
 
-@router.get("/", response_model=list[InviteOut])
+# ============================================
+# LIST INVITES – handles both trailing slash and no slash
+# ============================================
+@router.get("")          # handles /invites (no trailing slash)
+@router.get("/")         # handles /invites/ (with trailing slash)
 def list_invites(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("owner", "admin")),
@@ -87,7 +91,11 @@ def check_invite(
     }
 
 
-@router.post("/", response_model=InviteOut)
+# ============================================
+# CREATE INVITE – handles both trailing slash and no slash
+# ============================================
+@router.post("")
+@router.post("/")
 def create_invite(
     payload: InviteCreate,
     request: Request,

@@ -128,6 +128,21 @@ app = FastAPI(
 
 
 # ============================================
+# DEBUG ROUTES ENDPOINT
+# ============================================
+@app.get("/debug/routes")
+async def list_all_routes():
+    """List all registered routes for debugging."""
+    routes = []
+    for route in app.routes:
+        routes.append({
+            "path": route.path,
+            "methods": list(route.methods) if hasattr(route, 'methods') else [],
+        })
+    return {"total": len(routes), "routes": routes}
+
+
+# ============================================
 # CORS MIDDLEWARE (CRITICAL FOR FRONTEND)
 # ============================================
 # Get allowed origins from settings
@@ -139,7 +154,6 @@ if netlify_url not in allowed_origins:
     allowed_origins.append(netlify_url)
     logger.info(f"Added {netlify_url} to CORS origins")
 
-# Also ensure Railway backend URL is not in origins (it shouldn't be)
 logger.info(f"Final CORS allowed origins: {allowed_origins}")
 
 app.add_middleware(
@@ -159,7 +173,7 @@ app.add_middleware(
         "X-CSRF-Token",
     ],
     expose_headers=["Content-Length", "X-Total-Count", "Content-Disposition"],
-    max_age=86400,  # Cache preflight requests for 24 hours
+    max_age=86400,
 )
 
 
@@ -170,30 +184,16 @@ app.add_middleware(
 async def log_requests(request: Request, call_next):
     """Log all incoming requests and their responses."""
     start_time = time.time()
-    
-    # Log request
     logger.info(f"Incoming: {request.method} {request.url.path} from {request.headers.get('origin', 'unknown')}")
-    
     try:
         response = await call_next(request)
-        
-        # Calculate request duration
         duration = time.time() - start_time
-        
-        # Log response
-        logger.info(
-            f"Response: {response.status_code} for {request.method} {request.url.path} "
-            f"({duration:.3f}s)"
-        )
-        
-        # Add CORS headers explicitly (redundant but safe)
+        logger.info(f"Response: {response.status_code} for {request.method} {request.url.path} ({duration:.3f}s)")
         origin = request.headers.get("origin")
         if origin and origin in allowed_origins:
             response.headers["Access-Control-Allow-Origin"] = origin
             response.headers["Access-Control-Allow-Credentials"] = "true"
-        
         return response
-        
     except Exception as e:
         logger.error(f"Request failed: {request.method} {request.url.path} - {e}")
         raise
@@ -204,26 +204,13 @@ async def log_requests(request: Request, call_next):
 # ============================================
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    """Handle uncaught exceptions globally."""
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
-    return JSONResponse(
-        status_code=500,
-        content={
-            "detail": "Internal server error",
-            "path": str(request.url.path),
-            "method": request.method,
-        },
-    )
-
+    return JSONResponse(status_code=500, content={"detail": "Internal server error", "path": str(request.url.path), "method": request.method})
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
-    """Handle HTTP exceptions with proper logging."""
     logger.warning(f"HTTP {exc.status_code}: {exc.detail} on {request.method} {request.url.path}")
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={"detail": exc.detail},
-    )
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
 
 # ============================================
@@ -251,7 +238,6 @@ app.include_router(agent_router, prefix=settings.API_PREFIX, tags=["AI Agent"])
 # ============================================
 @app.get("/")
 async def root():
-    """Root endpoint with API information."""
     return {
         "message": settings.APP_NAME,
         "status": "running",
@@ -263,23 +249,13 @@ async def root():
         "cors_origins": allowed_origins,
     }
 
-
 @app.get(f"{settings.API_PREFIX}/health")
 async def health_check():
-    """Health check endpoint for Railway and monitoring."""
-    return {
-        "status": "healthy",
-        "timestamp": time.time(),
-        "app_name": settings.APP_NAME,
-        "environment": settings.APP_ENV,
-    }
-
+    return {"status": "healthy", "timestamp": time.time(), "app_name": settings.APP_NAME, "environment": settings.APP_ENV}
 
 @app.get(f"{settings.API_PREFIX}/health/detailed")
 async def detailed_health_check(db: Session = Depends(get_db)):
-    """Detailed health check with database status."""
     db_status = "connected" if db else "disconnected"
-    
     return {
         "status": "healthy",
         "timestamp": time.time(),
@@ -294,73 +270,46 @@ async def detailed_health_check(db: Session = Depends(get_db)):
 
 
 # ============================================
-# CORS TEST ENDPOINT (for debugging)
+# CORS TEST ENDPOINT
 # ============================================
 @app.options(f"{settings.API_PREFIX}/cors-test")
 async def cors_test():
-    """Endpoint to test CORS configuration."""
     return {"message": "CORS is working!"}
 
 
 # ============================================
-# PROJECT ENDPOINTS
+# PROJECT ENDPOINTS (existing)
 # ============================================
 @app.get(f"{settings.API_PREFIX}/projects", response_model=list[schemas.ProjectOut])
-async def get_projects(
-    skip: int = 0,
-    limit: int = 100,
-    stage: str | None = None,
-    sector: str | None = None,
-    db: Session = Depends(get_db),
-):
-    """Get all projects with optional filtering."""
+async def get_projects(skip: int = 0, limit: int = 100, stage: str | None = None, sector: str | None = None, db: Session = Depends(get_db)):
     if db is None:
         return []
-
     query = db.query(models.Project)
-
     if stage:
         query = query.filter(models.Project.stage == stage)
-
     if sector:
         query = query.filter(models.Project.sector == sector)
-
     return query.offset(skip).limit(limit).all()
 
-
 @app.get(f"{settings.API_PREFIX}/projects/summary", response_model=list[schemas.ProjectListItem])
-async def get_project_summaries(
-    skip: int = 0,
-    limit: int = 100,
-    db: Session = Depends(get_db),
-):
-    """Get project summaries (lightweight version for dashboard)."""
+async def get_project_summaries(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     if db is None:
         return []
-
     return db.query(models.Project).offset(skip).limit(limit).all()
-
 
 @app.get(f"{settings.API_PREFIX}/projects/{{project_id}}", response_model=schemas.ProjectOut)
 async def get_project(project_id: int, db: Session = Depends(get_db)):
-    """Get a single project by ID."""
     if db is None:
         raise HTTPException(status_code=503, detail="Database not available")
-
     project = db.query(models.Project).filter(models.Project.id == project_id).first()
-
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-
     return project
-
 
 @app.post(f"{settings.API_PREFIX}/projects/refresh", response_model=schemas.ApiMessage)
 async def refresh_projects():
-    """Trigger a refresh of all project data."""
     if update_all_projects is None:
         raise HTTPException(status_code=503, detail="Refresh worker is not available")
-
     try:
         update_all_projects.delay()
         return schemas.ApiMessage(message="Project refresh task started")
@@ -373,15 +322,12 @@ async def refresh_projects():
 # ============================================
 @app.get(f"{settings.API_PREFIX}/metrics")
 async def get_metrics(db: Session = Depends(get_db)):
-    """Get application metrics."""
     total_projects = 0
-
     if db is not None:
         try:
             total_projects = db.query(models.Project).count()
         except Exception as e:
             logger.warning(f"Could not count projects: {e}")
-
     return {
         "app_name": settings.APP_NAME,
         "environment": settings.APP_ENV,
@@ -399,13 +345,10 @@ async def get_metrics(db: Session = Depends(get_db)):
 # ============================================
 @app.websocket(settings.WS_PATH)
 async def websocket_endpoint(websocket: WebSocket):
-    """WebSocket endpoint for real-time updates."""
     if not settings.ENABLE_WEBSOCKETS:
         await websocket.close(code=1008, reason="WebSockets disabled")
         return
-
     await manager.connect(websocket)
-
     try:
         while True:
             data = await websocket.receive_text()
@@ -419,12 +362,11 @@ async def websocket_endpoint(websocket: WebSocket):
 
 
 # ============================================
-# DEBUG ENDPOINT (only in development)
+# DEBUG ENDPOINT (development only)
 # ============================================
 if settings.DEBUG:
     @app.get("/debug/config")
     async def debug_config():
-        """Debug endpoint to check configuration (development only)."""
         return {
             "frontend_url": settings.get_frontend_url(),
             "cors_origins": settings.get_cors_origins(),
@@ -438,11 +380,4 @@ if settings.DEBUG:
 # ============================================
 if __name__ == "__main__":
     import uvicorn
-    
-    uvicorn.run(
-        "app.main:app",
-        host=settings.HOST,
-        port=settings.PORT,
-        reload=settings.DEBUG,
-        log_level="info",
-    )
+    uvicorn.run("app.main:app", host=settings.HOST, port=settings.PORT, reload=settings.DEBUG, log_level="info")
