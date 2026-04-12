@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import {
   FiHome,
@@ -8,7 +8,6 @@ import {
   FiKey,
   FiCreditCard,
   FiFileText,
-  FiGrid,
   FiLogOut,
   FiShield,
   FiUser,
@@ -16,47 +15,122 @@ import {
   FiZap,
   FiSearch,
   FiCpu,
-  FiBriefcase, // added for Organizations
+  FiBriefcase,
+  FiLayers,
 } from "react-icons/fi";
 import { useAuth } from "../../context/AuthContext";
 
-const navItems = [
-  { label: "Home", to: "/", icon: FiHome },
+const publicNavItems = [
+  { label: "Home", to: "/dashboard", icon: FiHome },
   { label: "Search AI", to: "/search-intel", icon: FiSearch },
   { label: "AI Agent", to: "/agent", icon: FiCpu },
-  { label: "Dashboard", to: "/dashboard", icon: FiHome },
   { label: "Projects", to: "/projects", icon: FiFolder },
   { label: "Competitors", to: "/competitors", icon: FiUsers },
+  { label: "Organizations", to: "/organizations", icon: FiBriefcase },
+];
+
+const protectedNavItems = [
   { label: "Watchlists", to: "/watchlists", icon: FiStar },
   { label: "Reports", to: "/reports", icon: FiFileText },
   { label: "Briefings", to: "/briefings", icon: FiZap },
   { label: "Workspace", to: "/workspace", icon: FiSettings },
-  { label: "Team", to: "/team", icon: FiGrid },
-  { label: "Members", to: "/members", icon: FiUsers },
   { label: "Account", to: "/account", icon: FiUser },
+];
+
+const adminNavItems = [
   { label: "API Keys", to: "/api-keys", icon: FiKey },
   { label: "Billing", to: "/billing", icon: FiCreditCard },
-  { label: "Audit Logs", to: "/audit-logs", icon: FiFileText },
+  { label: "Audit Logs", to: "/audit-logs", icon: FiLayers },
   { label: "API Docs", to: "/api-docs", icon: FiFileText },
-  { label: "Admin Roles", to: "/admin/roles", icon: FiShield },
-  // ✅ New: Organizations management (owner only)
-  { label: "Organizations", to: "/organizations", icon: FiBriefcase },
+];
+
+const ownerNavItems = [
+  { label: "Admin", to: "/admin", icon: FiShield },
 ];
 
 const Sidebar = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
 
-  const handleLogout = () => {
-    logout();
-    navigate("/login");
+  const role = String(user?.role || "").toLowerCase();
+  const isLoggedIn = !!user;
+  const isOwner = role === "owner";
+  const isAdmin = role === "admin";
+  const isAnalyst = role === "analyst";
+
+  const visibleProtectedNav = useMemo(() => {
+    if (!isLoggedIn) return [];
+    return protectedNavItems;
+  }, [isLoggedIn]);
+
+  const visibleAdminNav = useMemo(() => {
+    if (!isLoggedIn) return [];
+
+    if (isOwner || isAdmin) {
+      return adminNavItems;
+    }
+
+    if (isAnalyst) {
+      return adminNavItems.filter((item) => item.to === "/api-docs");
+    }
+
+    return [];
+  }, [isLoggedIn, isOwner, isAdmin, isAnalyst]);
+
+  const visibleOwnerNav = useMemo(() => {
+    if (!isLoggedIn || !isOwner) return [];
+    return ownerNavItems;
+  }, [isLoggedIn, isOwner]);
+
+  const handleLogout = async () => {
+    try {
+      localStorage.removeItem("w3i_token");
+      localStorage.removeItem("token");
+      localStorage.removeItem("access_token");
+      localStorage.removeItem("auth_token");
+      localStorage.removeItem("user");
+      localStorage.removeItem("auth_user");
+      localStorage.removeItem("currentUser");
+      sessionStorage.clear();
+    } catch (e) {
+      console.warn("Could not fully clear local session:", e);
+    }
+
+    try {
+      await logout();
+    } catch (e) {
+      console.warn("Logout helper failed:", e);
+    }
+
+    navigate("/");
+  };
+
+  const renderNavItem = (item) => {
+    const Icon = item.icon;
+
+    return (
+      <NavLink
+        key={item.to}
+        to={item.to}
+        className={({ isActive }) =>
+          `nav-link ${
+            isActive
+              ? "active"
+              : ""
+          }`
+        }
+      >
+        <Icon className="h-5 w-5" />
+        <span>{item.label}</span>
+      </NavLink>
+    );
   };
 
   return (
-    <aside className="hidden xl:flex xl:w-[280px] xl:flex-col xl:border-r xl:border-slate-200 xl:bg-white">
+    <aside className="app-sidebar hidden xl:flex xl:w-[280px] xl:flex-col">
       <div className="border-b border-slate-200 px-5 py-5">
         <div className="mb-4 flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-gradient shadow-lg shadow-cyan-500/20">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-r from-cyan-500 to-teal-500 shadow-lg shadow-cyan-500/20">
             <FiShield className="h-5 w-5 text-white" />
           </div>
           <div>
@@ -67,55 +141,82 @@ const Sidebar = () => {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <div className="sidebar-card p-4">
           <div className="text-sm font-semibold text-slate-900">
-            {user?.full_name || "Workspace User"}
+            {user?.full_name || "Public Visitor"}
           </div>
-          <div className="mt-1 text-sm text-slate-500">{user?.email || "-"}</div>
+          <div className="mt-1 text-sm text-slate-500">
+            {user?.email || "Preview mode"}
+          </div>
           <div className="mt-3 inline-flex rounded-full bg-cyan-100 px-3 py-1 text-xs font-semibold text-cyan-700">
-            {user?.role || "viewer"}
+            {user?.role || "public"}
           </div>
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-5">
         <div className="mb-3 px-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
-          Navigation
+          Public Preview
         </div>
 
         <nav className="space-y-2">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-
-            return (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                className={({ isActive }) =>
-                  `flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition ${
-                    isActive
-                      ? "bg-brand-gradient text-white shadow-lg shadow-cyan-500/20"
-                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                  }`
-                }
-              >
-                <Icon className="h-5 w-5" />
-                <span>{item.label}</span>
-              </NavLink>
-            );
-          })}
+          {publicNavItems.map(renderNavItem)}
         </nav>
+
+        {visibleProtectedNav.length > 0 ? (
+          <>
+            <div className="mb-3 mt-6 px-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
+              Workspace
+            </div>
+            <nav className="space-y-2">
+              {visibleProtectedNav.map(renderNavItem)}
+            </nav>
+          </>
+        ) : null}
+
+        {visibleAdminNav.length > 0 ? (
+          <>
+            <div className="mb-3 mt-6 px-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
+              Managed Services
+            </div>
+            <nav className="space-y-2">
+              {visibleAdminNav.map(renderNavItem)}
+            </nav>
+          </>
+        ) : null}
+
+        {visibleOwnerNav.length > 0 ? (
+          <>
+            <div className="mb-3 mt-6 px-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
+              Owner Controls
+            </div>
+            <nav className="space-y-2">
+              {visibleOwnerNav.map(renderNavItem)}
+            </nav>
+          </>
+        ) : null}
       </div>
 
       <div className="border-t border-slate-200 px-4 py-4">
-        <button
-          type="button"
-          onClick={handleLogout}
-          className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-red-50 hover:text-red-700"
-        >
-          <FiLogOut className="h-5 w-5" />
-          <span>Log Out</span>
-        </button>
+        {isLoggedIn ? (
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-red-50 hover:text-red-700"
+          >
+            <FiLogOut className="h-5 w-5" />
+            <span>Log Out</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => navigate("/organizations")}
+            className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+          >
+            <FiBriefcase className="h-5 w-5" />
+            <span>Launch Workspace</span>
+          </button>
+        )}
       </div>
     </aside>
   );

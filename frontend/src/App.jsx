@@ -18,15 +18,12 @@ import Briefings from "./pages/Briefings";
 import SearchIntel from "./pages/SearchIntel";
 import AgentChat from "./pages/AgentChat";
 import WorkspaceSettings from "./pages/WorkspaceSettings";
-import TeamInvites from "./pages/TeamInvites";
-import TeamMembers from "./pages/TeamMembers";
 import Account from "./pages/Account";
 import APIKeys from "./pages/APIKeys";
 import Billing from "./pages/Billing";
 import BillingSuccess from "./pages/BillingSuccess";
 import BillingCancel from "./pages/BillingCancel";
 import AuditLogs from "./pages/AuditLogs";
-import AdminRoles from "./pages/AdminRoles";
 import ApiDocsPage from "./pages/ApiDocsPage";
 import Organizations from "./pages/Organizations";
 import AdminPanel from "./pages/AdminPanel";
@@ -35,20 +32,25 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import "./index.css";
 
 function getStoredUser() {
-  try {
-    return (
-      JSON.parse(localStorage.getItem("user")) ||
-      JSON.parse(localStorage.getItem("auth_user")) ||
-      JSON.parse(localStorage.getItem("currentUser")) ||
-      null
-    );
-  } catch {
-    return null;
+  const keys = ["user", "auth_user", "currentUser"];
+
+  for (const key of keys) {
+    const raw = localStorage.getItem(key);
+    if (!raw) continue;
+
+    try {
+      return JSON.parse(raw);
+    } catch {
+      localStorage.removeItem(key);
+    }
   }
+
+  return null;
 }
 
 function getStoredToken() {
   return (
+    localStorage.getItem("w3i_token") ||
     localStorage.getItem("token") ||
     localStorage.getItem("access_token") ||
     localStorage.getItem("auth_token") ||
@@ -60,8 +62,8 @@ function RequireAuth({ children }) {
   const token = getStoredToken();
   const user = getStoredUser();
 
-  if (!token && !user) {
-    return <Navigate to="/login" replace />;
+  if (!token || !user) {
+    return <Navigate to="/organizations" replace />;
   }
 
   return children;
@@ -71,15 +73,18 @@ function RequireRole({ roles = [], children }) {
   const token = getStoredToken();
   const user = getStoredUser();
 
-  if (!token && !user) {
-    return <Navigate to="/login" replace />;
-  }
-
-  if (!user?.role) {
+  if (!token || !user) {
     return <Navigate to="/organizations" replace />;
   }
 
-  if (roles.length > 0 && !roles.includes(user.role)) {
+  const userRole = String(user?.role || "").toLowerCase();
+  const normalizedRoles = roles.map((role) => String(role).toLowerCase());
+
+  if (!userRole) {
+    return <Navigate to="/organizations" replace />;
+  }
+
+  if (normalizedRoles.length > 0 && !normalizedRoles.includes(userRole)) {
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -92,27 +97,30 @@ function App() {
       <AuthProvider>
         <BrowserRouter>
           <Routes>
-            {/* Landing only */}
+            {/* Public landing */}
             <Route path="/" element={<Landing />} />
             <Route path="/home" element={<Navigate to="/" replace />} />
 
-            {/* Public access/auth entry */}
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/accept-invite" element={<AcceptInvite />} />
-            <Route path="/organizations" element={<Organizations />} />
-
-            {/* Public preview routes */}
+            {/* Public preview pages */}
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/projects" element={<Projects />} />
             <Route path="/projects/:id" element={<ProjectDetail />} />
             <Route path="/competitors" element={<Competitors />} />
-            <Route path="/reports" element={<Reports />} />
-            <Route path="/briefings" element={<Briefings />} />
             <Route path="/search-intel" element={<SearchIntel />} />
-            <Route path="/api-docs" element={<ApiDocsPage />} />
+            <Route path="/agent" element={<AgentChat />} />
 
-            {/* Protected real-use routes */}
+            {/* Workspace / access flow */}
+            <Route path="/organizations" element={<Organizations />} />
+            <Route
+              path="/launch-workspace"
+              element={<Navigate to="/organizations" replace />}
+            />
+            <Route path="/explore" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/accept-invite" element={<AcceptInvite />} />
+
+            {/* Protected workspace pages */}
             <Route
               path="/watchlists"
               element={
@@ -122,10 +130,18 @@ function App() {
               }
             />
             <Route
-              path="/agent"
+              path="/reports"
               element={
                 <RequireAuth>
-                  <AgentChat />
+                  <Reports />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/briefings"
+              element={
+                <RequireAuth>
+                  <Briefings />
                 </RequireAuth>
               }
             />
@@ -138,34 +154,10 @@ function App() {
               }
             />
             <Route
-              path="/team"
-              element={
-                <RequireAuth>
-                  <TeamInvites />
-                </RequireAuth>
-              }
-            />
-            <Route
               path="/account"
               element={
                 <RequireAuth>
                   <Account />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/api-keys"
-              element={
-                <RequireAuth>
-                  <APIKeys />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/billing"
-              element={
-                <RequireAuth>
-                  <Billing />
                 </RequireAuth>
               }
             />
@@ -186,12 +178,20 @@ function App() {
               }
             />
 
-            {/* Owner / admin routes */}
+            {/* Admin / managed services */}
             <Route
-              path="/members"
+              path="/api-keys"
               element={
                 <RequireRole roles={["owner", "admin"]}>
-                  <TeamMembers />
+                  <APIKeys />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/billing"
+              element={
+                <RequireRole roles={["owner", "admin"]}>
+                  <Billing />
                 </RequireRole>
               }
             />
@@ -204,10 +204,10 @@ function App() {
               }
             />
             <Route
-              path="/admin/roles"
+              path="/api-docs"
               element={
-                <RequireRole roles={["owner", "admin"]}>
-                  <AdminRoles />
+                <RequireRole roles={["owner", "admin", "analyst"]}>
+                  <ApiDocsPage />
                 </RequireRole>
               }
             />
@@ -222,9 +222,16 @@ function App() {
               }
             />
 
-            {/* Helpful aliases */}
-            <Route path="/launch-workspace" element={<Navigate to="/organizations" replace />} />
-            <Route path="/explore" element={<Navigate to="/dashboard" replace />} />
+            {/* Removed pages from final product flow */}
+            <Route path="/team" element={<Navigate to="/organizations" replace />} />
+            <Route
+              path="/members"
+              element={<Navigate to="/organizations" replace />}
+            />
+            <Route
+              path="/admin/roles"
+              element={<Navigate to="/organizations" replace />}
+            />
 
             {/* Fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />

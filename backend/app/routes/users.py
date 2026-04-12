@@ -5,7 +5,14 @@ from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user, require_roles
 from app.database import get_db
-from app.models import User, Organization
+from app.models import (
+    AuditLog,
+    Organization,
+    TeamInvite,
+    User,
+    Watchlist,
+    WatchlistItem,
+)
 from app.schemas import UserOut
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -35,14 +42,21 @@ def _organization_user_count(db: Session, organization_id: int) -> int:
     )
 
 
-def _pick_new_owner(db: Session, organization_id: int, excluding_user_id: int | None = None) -> User | None:
-    query = db.query(User).filter(User.organization_id == organization_id)
+def _pick_new_owner(
+    db: Session,
+    organization_id: int,
+    excluding_user_id: int | None = None,
+) -> User | None:
+    base_query = db.query(User).filter(User.organization_id == organization_id)
 
     if excluding_user_id is not None:
-        query = query.filter(User.id != excluding_user_id)
+        base_query = base_query.filter(User.id != excluding_user_id)
 
-    # Prefer admin, then analyst, then viewer, then any remaining user
-    admin_user = query.filter(User.role == "admin").order_by(User.created_at.asc()).first()
+    admin_user = (
+        base_query.filter(User.role == "admin")
+        .order_by(User.created_at.asc())
+        .first()
+    )
     if admin_user:
         return admin_user
 
@@ -50,8 +64,8 @@ def _pick_new_owner(db: Session, organization_id: int, excluding_user_id: int | 
         db.query(User)
         .filter(
             User.organization_id == organization_id,
-            User.id != excluding_user_id if excluding_user_id is not None else True,
             User.role == "analyst",
+            User.id != excluding_user_id if excluding_user_id is not None else True,
         )
         .order_by(User.created_at.asc())
         .first()
@@ -63,8 +77,8 @@ def _pick_new_owner(db: Session, organization_id: int, excluding_user_id: int | 
         db.query(User)
         .filter(
             User.organization_id == organization_id,
-            User.id != excluding_user_id if excluding_user_id is not None else True,
             User.role == "viewer",
+            User.id != excluding_user_id if excluding_user_id is not None else True,
         )
         .order_by(User.created_at.asc())
         .first()
@@ -72,8 +86,30 @@ def _pick_new_owner(db: Session, organization_id: int, excluding_user_id: int | 
     if viewer_user:
         return viewer_user
 
-    fallback_user = query.order_by(User.created_at.asc()).first()
+    fallback_user = base_query.order_by(User.created_at.asc()).first()
     return fallback_user
+
+
+def _clear_user_references(db: Session, user_id: int) -> None:
+    """
+    Clear nullable foreign key references to this user before deleting.
+    This avoids FK violations when deleting users.
+    """
+    db.query(TeamInvite).filter(
+        TeamInvite.invited_by_user_id == user_id
+    ).update({TeamInvite.invited_by_user_id: None}, synchronize_session=False)
+
+    db.query(AuditLog).filter(
+        AuditLog.actor_user_id == user_id
+    ).update({AuditLog.actor_user_id: None}, synchronize_session=False)
+
+    db.query(Watchlist).filter(
+        Watchlist.created_by == user_id
+    ).update({Watchlist.created_by: None}, synchronize_session=False)
+
+    db.query(WatchlistItem).filter(
+        WatchlistItem.added_by == user_id
+    ).update({WatchlistItem.added_by: None}, synchronize_session=False)
 
 
 @router.get("/", response_model=list[UserOut])
@@ -143,11 +179,12 @@ def update_user_role(
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
 
-    # Admin cannot assign owner
     if current_user.role == "admin" and role == "owner":
-        raise HTTPException(status_code=403, detail="Only an owner can assign owner role.")
+        raise HTTPException(
+            status_code=403,
+            detail="Only an owner can assign owner role.",
+        )
 
-    # Prevent removing the last owner by role change
     if user.role == "owner" and role != "owner":
         owner_count = _owner_count(db, current_user.organization_id)
         if owner_count <= 1:
@@ -174,6 +211,14 @@ def delete_my_account(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """
+    Delete the current signed-in account.
+
+    Final behavior:
+    - If user is the only user in the org -> delete user and organization.
+    - If user is last owner but org has others -> transfer ownership first.
+    - Otherwise -> delete only the current user.
+    """
     _ensure_db(db)
 
     payload = payload or {}
@@ -188,18 +233,21 @@ def delete_my_account(
     organization_id = current_user.organization_id
     email = current_user.email
     user_id = current_user.id
-    user_role = current_user.role
+    user_role = (current_user.role or "").strip().lower()
 
     total_users = _organization_user_count(db, organization_id)
     owner_count = _owner_count(db, organization_id)
 
     try:
-        # Case 1: user is sole user in org -> delete account and org
         if total_users == 1:
             org = db.query(Organization).filter(Organization.id == organization_id).first()
+
+            _clear_user_references(db, current_user.id)
             db.delete(current_user)
+
             if org:
                 db.delete(org)
+
             db.commit()
 
             return {
@@ -211,8 +259,8 @@ def delete_my_account(
                 "ownership_transferred": False,
             }
 
-        # Case 2: user is last owner but org has other users -> promote another user first
         promoted_user = None
+
         if user_role == "owner" and owner_count <= 1:
             promoted_user = _pick_new_owner(
                 db=db,
@@ -229,6 +277,7 @@ def delete_my_account(
             promoted_user.role = "owner"
             db.add(promoted_user)
 
+        _clear_user_references(db, current_user.id)
         db.delete(current_user)
         db.commit()
 
@@ -279,11 +328,12 @@ def delete_user(
             detail="Use DELETE /users/me to delete your own account.",
         )
 
-    # Admin cannot delete owners
     if current_user.role == "admin" and user.role == "owner":
-        raise HTTPException(status_code=403, detail="Admins cannot delete owners.")
+        raise HTTPException(
+            status_code=403,
+            detail="Admins cannot delete owners.",
+        )
 
-    # Prevent deleting the last owner by another user
     if user.role == "owner":
         owner_count = _owner_count(db, current_user.organization_id)
         if owner_count <= 1:
@@ -295,12 +345,21 @@ def delete_user(
     deleted_email = user.email
     deleted_user_id = user.id
 
-    db.delete(user)
-    db.commit()
+    try:
+        _clear_user_references(db, user.id)
+        db.delete(user)
+        db.commit()
 
-    return {
-        "success": True,
-        "message": "User deleted successfully.",
-        "deleted_user_id": deleted_user_id,
-        "deleted_email": deleted_email,
-    }
+        return {
+            "success": True,
+            "message": "User deleted successfully.",
+            "deleted_user_id": deleted_user_id,
+            "deleted_email": deleted_email,
+        }
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to delete user: {str(e)}",
+        )

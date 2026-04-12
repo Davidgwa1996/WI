@@ -6,6 +6,7 @@ import {
   FiCheckCircle,
   FiTrash2,
   FiAlertTriangle,
+  FiCrown,
 } from "react-icons/fi";
 
 import Sidebar from "../components/dashboard/Sidebar";
@@ -31,10 +32,13 @@ const Account = () => {
     return user?.role ? String(user.role).toUpperCase() : "VIEWER";
   }, [user]);
 
-  const canDelete = !!user && confirmText.trim().toUpperCase() === "DELETE" && !deleting;
+  const isOwner = String(user?.role || "").toLowerCase() === "owner";
+  const canDelete =
+    !!user && confirmText.trim().toUpperCase() === "DELETE" && !deleting;
 
   const clearLocalSession = async () => {
     try {
+      localStorage.removeItem("w3i_token");
       localStorage.removeItem("token");
       localStorage.removeItem("access_token");
       localStorage.removeItem("auth_token");
@@ -67,7 +71,9 @@ const Account = () => {
     }
 
     const finalConfirm = window.confirm(
-      "This will permanently delete your account. Continue?"
+      isOwner
+        ? "You are the owner. This will permanently delete your account and may also remove or transfer ownership depending on backend rules. Continue?"
+        : "This will permanently delete your account. Continue?"
     );
     if (!finalConfirm) return;
 
@@ -76,11 +82,6 @@ const Account = () => {
       setError("");
       setSuccess("");
 
-      /**
-       * Try the most common signatures safely:
-       * 1) deleteMyAccount({ confirm: "DELETE" })
-       * 2) deleteMyAccount()
-       */
       if (typeof adminAPI?.deleteMyAccount !== "function") {
         throw new Error("Delete account API is not available.");
       }
@@ -147,7 +148,7 @@ const Account = () => {
                 </div>
 
                 <div className="mt-5 flex justify-center">
-                  <span className="rounded-full bg-cyan-50 px-4 py-1.5 text-xs font-semibold text-cyan-700 border border-cyan-200">
+                  <span className="rounded-full border border-cyan-200 bg-cyan-50 px-4 py-1.5 text-xs font-semibold text-cyan-700">
                     {roleLabel}
                   </span>
                 </div>
@@ -198,6 +199,29 @@ const Account = () => {
           </SectionCard>
 
           <SectionCard
+            title="Owner Privilege"
+            subtitle="The owner remains the highest authority inside the workspace."
+            className="mt-8"
+          >
+            <div className="app-panel-soft p-5">
+              <div className="flex items-start gap-3">
+                <FiCrown className="mt-1 h-5 w-5 text-amber-500" />
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    Ownership rule
+                  </h3>
+                  <p className="mt-2 text-sm leading-7 text-slate-600">
+                    The owner has the highest privileges in the platform, including
+                    organization control, approval flow, access structure, and account
+                    authority. This page allows the current signed-in account to delete
+                    itself when backend permissions allow it.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </SectionCard>
+
+          <SectionCard
             title="Danger Zone"
             subtitle="Permanently delete your account. This cannot be undone."
             className="mt-8"
@@ -210,6 +234,11 @@ const Account = () => {
                   <p className="mt-2 text-sm">
                     This removes your current account permanently. If this is your
                     temporary account, you can delete it and create your real one afterward.
+                    {isOwner ? (
+                      <span className="block mt-2 font-medium">
+                        You are currently signed in as an owner.
+                      </span>
+                    ) : null}
                   </p>
                 </div>
               </div>

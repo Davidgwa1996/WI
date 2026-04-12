@@ -6,6 +6,7 @@ import {
   FiTrendingUp,
   FiZap,
   FiRefreshCw,
+  FiEye,
 } from "react-icons/fi";
 
 import api, { projectsAPI, systemAPI } from "../services/api";
@@ -46,8 +47,8 @@ const Dashboard = () => {
 
     try {
       const [projectsData, metricsData, workspaceSummary] = await Promise.all([
-        projectsAPI.getAll(),
-        systemAPI.getMetrics(),
+        projectsAPI.getAll().catch(() => []),
+        systemAPI.getMetrics().catch(() => null),
         api?.agent?.summary ? api.agent.summary().catch(() => null) : Promise.resolve(null),
       ]);
 
@@ -69,7 +70,7 @@ const Dashboard = () => {
   }, []);
 
   useEffect(() => {
-    document.title = "Web3 Intel Platform | Dashboard";
+    document.title = "Web3 Intel Platform | Home";
     loadDashboard();
   }, [loadDashboard]);
 
@@ -141,7 +142,7 @@ const Dashboard = () => {
       trackEvent("dashboard_refresh_triggered");
     } catch (err) {
       console.error("[Dashboard] Refresh failed:", err);
-      setError(err?.message || "Could not trigger refresh.");
+      setError(err?.message || "Could not refresh data.");
     } finally {
       setRefreshing(false);
     }
@@ -181,7 +182,7 @@ const Dashboard = () => {
             <div className="flex min-h-[60vh] items-center justify-center">
               <div className="text-center">
                 <div className="spinner mx-auto" />
-                <p className="mt-4 font-medium text-slate-600">Loading dashboard...</p>
+                <p className="mt-4 font-medium text-slate-600">Loading home preview...</p>
               </div>
             </div>
           </DashboardShell>
@@ -214,8 +215,8 @@ const Dashboard = () => {
               connected={isConnected}
               onRefresh={handleRefresh}
               loading={refreshing}
-              title="Dashboard"
-              subtitle="Real-time project intelligence for your workspace."
+              title="Home"
+              subtitle="Public platform preview with real-time Web3 intelligence."
             />
           </div>
 
@@ -229,6 +230,11 @@ const Dashboard = () => {
               <FiRefreshCw className={refreshing ? "animate-spin" : ""} />
               {refreshing ? "Refreshing..." : "Refresh Data"}
             </button>
+
+            <div className="action-btn secondary">
+              <FiEye />
+              Public Preview
+            </div>
           </div>
 
           {error ? (
@@ -275,7 +281,7 @@ const Dashboard = () => {
             <div className="mb-8 app-panel p-6">
               <div className="mb-4 flex items-center gap-2 text-cyan-700">
                 <FiZap className="h-5 w-5" />
-                <h2 className="text-xl font-bold text-slate-900">Agent Workspace Summary</h2>
+                <h2 className="text-xl font-bold text-slate-900">AI Workspace Summary</h2>
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

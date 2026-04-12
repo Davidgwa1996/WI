@@ -48,24 +48,24 @@ except Exception as e:
 # ROUTERS
 # ============================================
 from app.routes import (
-    auth_router,
-    users_router,
-    organizations_router,
-    api_keys_router,
-    subscriptions_router,
-    audit_logs_router,
-    invites_router,
-    workspace_router,
-    billing_router,
-    watchlists_router,
-    reports_router,
-    briefings_router,
-    search_router,
-    exports_router,
     agent_router,
+    api_keys_router,
+    audit_logs_router,
+    auth_router,
+    billing_router,
+    briefings_router,
+    exports_router,
+    invites_router,
+    organizations_router,
+    reports_router,
+    search_router,
+    subscriptions_router,
+    users_router,
+    watchlists_router,
+    workspace_router,
 )
-from app.routes.uploads import router as uploads_router
 from app.routes.admin import router as admin_router
+from app.routes.uploads import router as uploads_router
 
 # ============================================
 # HELPERS
@@ -86,6 +86,19 @@ async def init_db_with_retry(max_retries: int = 5, delay: int = 2) -> bool:
     return False
 
 
+def _get_allowed_origins() -> list[str]:
+    origins = list(settings.get_cors_origins() or [])
+    netlify_url = "https://web3dkintel.netlify.app"
+    if netlify_url not in origins:
+        origins.append(netlify_url)
+
+    # remove duplicates while preserving order
+    origins = list(dict.fromkeys(origins))
+    return origins
+
+
+allowed_origins = _get_allowed_origins()
+
 # ============================================
 # LIFESPAN
 # ============================================
@@ -97,7 +110,7 @@ async def lifespan(app: FastAPI):
     logger.info(f"API Prefix: {settings.API_PREFIX}")
     logger.info(f"WebSocket Path: {settings.WS_PATH}")
     logger.info(f"Frontend URL: {settings.get_frontend_url()}")
-    logger.info(f"CORS Origins: {settings.get_cors_origins()}")
+    logger.info(f"CORS Origins: {allowed_origins}")
     logger.info("=" * 50)
 
     try:
@@ -158,16 +171,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+logger.info(f"Final CORS allowed origins: {allowed_origins}")
+
 # ============================================
 # CORS
 # ============================================
-allowed_origins = settings.get_cors_origins()
-netlify_url = "https://web3dkintel.netlify.app"
-if netlify_url not in allowed_origins:
-    allowed_origins.append(netlify_url)
-
-logger.info(f"Final CORS allowed origins: {allowed_origins}")
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
@@ -219,9 +227,11 @@ async def log_requests(request: Request, call_next):
         f"Incoming: {request.method} {request.url.path} "
         f"from {request.headers.get('origin', 'unknown')}"
     )
+
     try:
         response = await call_next(request)
         duration = time.time() - start_time
+
         logger.info(
             f"Response: {response.status_code} for {request.method} "
             f"{request.url.path} ({duration:.3f}s)"
@@ -257,7 +267,10 @@ async def global_exception_handler(request: Request, exc: Exception):
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     logger.warning(f"HTTP {exc.status_code}: {exc.detail} on {request.method} {request.url.path}")
-    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+    )
 
 
 # ============================================
@@ -333,6 +346,7 @@ async def get_projects(
         return []
 
     query = db.query(models.Project)
+
     if stage:
         query = query.filter(models.Project.stage == stage)
     if sector:
@@ -368,6 +382,7 @@ async def get_project(project_id: int, db: Session = Depends(get_db)):
 @app.get(f"{settings.API_PREFIX}/metrics")
 async def get_metrics(db: Session = Depends(get_db)):
     total_projects = 0
+
     if db is not None:
         try:
             total_projects = db.query(models.Project).count()
@@ -390,6 +405,7 @@ async def get_metrics(db: Session = Depends(get_db)):
 async def refresh_projects():
     if update_all_projects is None:
         raise HTTPException(status_code=503, detail="Refresh worker is not available")
+
     try:
         update_all_projects.delay()
         return schemas.ApiMessage(message="Project refresh task started")
@@ -404,10 +420,13 @@ async def refresh_projects():
 async def list_all_routes():
     routes = []
     for route in app.routes:
-        routes.append({
-            "path": route.path,
-            "methods": list(route.methods) if hasattr(route, "methods") else [],
-        })
+        routes.append(
+            {
+                "path": route.path,
+                "methods": list(route.methods) if hasattr(route, "methods") else [],
+            }
+        )
+
     return {
         "total": len(routes),
         "routes": routes,
@@ -430,16 +449,19 @@ async def debug_email_config():
 @app.post("/test/create-invite")
 async def test_create_invite(email: str, db: Session = Depends(get_db)):
     from app.services.invites import create_team_invite
+    from app.models import Organization, User
+
     if db is None:
         return {"error": "Database not available"}
 
     try:
-        from app.models import Organization, User
-
         org = db.query(Organization).first()
         user = db.query(User).first()
+
         if not org or not user:
-            return {"error": f"No org/user found. Org: {org is not None}, User: {user is not None}"}
+            return {
+                "error": f"No org/user found. Org: {org is not None}, User: {user is not None}"
+            }
 
         invite, invite_link = create_team_invite(
             db=db,
@@ -474,10 +496,11 @@ async def test_send_email(email: str, db: Session = Depends(get_db)):
 
     org = db.query(Organization).first()
     user = db.query(User).first()
+
     if not org or not user:
         return {"error": "No org/user for email context"}
 
-    test_link = f"{settings.get_frontend_url()}/invite/test-token-123"
+    test_link = f"{settings.get_frontend_url()}/accept-invite?token=test-token-123"
     result = send_invite_email(
         email=email,
         invite_link=test_link,
@@ -486,6 +509,7 @@ async def test_send_email(email: str, db: Session = Depends(get_db)):
         organization_name=org.name,
         expires_hours=72,
     )
+
     return {
         "success": result,
         "email": email,
@@ -502,7 +526,7 @@ async def test_db_status(db: Session = Depends(get_db)):
         return {"error": "Database not available"}
 
     try:
-        from app.models import Organization, User, Project
+        from app.models import Organization, Project, User
 
         org_count = db.query(Organization).count()
         user_count = db.query(User).count()
@@ -560,6 +584,7 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         while True:
             data = await websocket.receive_text()
+
             if data == "ping":
                 await manager.send_personal_message(
                     {"type": "pong", "timestamp": time.time()},

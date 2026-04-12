@@ -64,6 +64,24 @@ body {
   color: #f8fafc;
 }
 
+.content-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 1.25rem;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+}
+
+.content-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.1);
+}
+
+.section-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 1rem;
+}
+
 /* ============================================
    CUSTOM SCROLLBAR
    ============================================ */
@@ -96,12 +114,18 @@ button,
 .watchlist-card,
 .app-panel,
 .app-panel-soft,
-.action-btn {
+.content-card,
+.action-btn,
+.nav-link,
+.btn-primary,
+.btn-secondary,
+.btn-light,
+.btn-danger {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ============================================
-   ANIMATION KEYFRAMES
+   ANIMATIONS
    ============================================ */
 @keyframes fadeInUp {
   from {
@@ -194,13 +218,21 @@ button,
   animation-fill-mode: both;
 }
 
-.stat-card:nth-child(1) { animation-delay: 0.05s; }
-.stat-card:nth-child(2) { animation-delay: 0.1s; }
-.stat-card:nth-child(3) { animation-delay: 0.15s; }
-.stat-card:nth-child(4) { animation-delay: 0.2s; }
+.stat-card:nth-child(1) {
+  animation-delay: 0.05s;
+}
+.stat-card:nth-child(2) {
+  animation-delay: 0.1s;
+}
+.stat-card:nth-child(3) {
+  animation-delay: 0.15s;
+}
+.stat-card:nth-child(4) {
+  animation-delay: 0.2s;
+}
 
 /* ============================================
-   GLASS / LANDING EFFECTS
+   LANDING / DARK-ONLY EFFECTS
    ============================================ */
 .glass-effect {
   background: rgba(255, 255, 255, 0.7);
@@ -242,27 +274,6 @@ button,
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
   animation: glow 2s infinite;
   color: #f8fafc;
-}
-
-/* ============================================
-   INTERNAL PAGE CARDS
-   ============================================ */
-.content-card {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 1.25rem;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
-}
-
-.content-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.1);
-}
-
-.section-card {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 1rem;
 }
 
 /* ============================================
@@ -719,7 +730,7 @@ button,
 }
 
 /* ============================================
-   UTILITY CLASSES
+   UTILITIES
    ============================================ */
 .line-clamp-1 {
   display: -webkit-box;
@@ -769,6 +780,7 @@ button,
 
 /* ============================================
    OPTIONAL DARK MODE
+   Keep landing page dark only by default.
    ============================================ */
 @media (prefers-color-scheme: dark) {
   body.dark-mode {

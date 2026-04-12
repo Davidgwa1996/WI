@@ -12,6 +12,8 @@ import {
   FiGrid,
   FiLogIn,
   FiUsers,
+  FiSearch,
+  FiMessageSquare,
 } from "react-icons/fi";
 
 const FeatureCard = ({ icon: Icon, title, text }) => (
@@ -19,7 +21,7 @@ const FeatureCard = ({ icon: Icon, title, text }) => (
     <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-r from-brand-500 to-teal-500 shadow-lg shadow-brand-500/20">
       <Icon className="h-6 w-6 text-white" />
     </div>
-    <h3 className="mb-2 text-xl font-bold text-dark-text">{title}</h3>
+    <h3 className="mb-2 text-xl font-bold text-white">{title}</h3>
     <p className="text-slate-400">{text}</p>
   </div>
 );
@@ -30,15 +32,15 @@ const QuickLinkCard = ({ to, icon: Icon, title, text, primary = false }) => (
     className={`group rounded-2xl border p-5 transition-all duration-300 hover:-translate-y-1 ${
       primary
         ? "border-brand-500/30 bg-brand-500/10 shadow-lg shadow-brand-500/10"
-        : "border-slate-800 bg-dark-panel/40 hover:border-brand-500/20"
+        : "border-slate-800 bg-slate-900/40 hover:border-brand-500/20"
     }`}
   >
-    <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-dark-panel/70">
+    <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-slate-900/70">
       <Icon className="h-5 w-5 text-brand-400" />
     </div>
     <div className="flex items-center justify-between gap-3">
       <div>
-        <h3 className="text-lg font-bold text-dark-text">{title}</h3>
+        <h3 className="text-lg font-bold text-white">{title}</h3>
         <p className="mt-1 text-sm text-slate-400">{text}</p>
       </div>
       <FiArrowRight className="h-5 w-5 text-brand-400 transition-transform duration-300 group-hover:translate-x-1" />
@@ -48,7 +50,7 @@ const QuickLinkCard = ({ to, icon: Icon, title, text, primary = false }) => (
 
 const Landing = () => {
   return (
-    <div className="min-h-screen bg-dark-bg text-dark-text">
+    <div className="landing-page">
       {/* Hero Section */}
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 bg-hero-pattern" />
@@ -63,7 +65,7 @@ const Landing = () => {
                 Enterprise AI Intelligence
               </div>
 
-              <h1 className="text-5xl font-black tracking-tight md:text-6xl">
+              <h1 className="text-5xl font-black tracking-tight text-white md:text-6xl">
                 <span className="gradient-text">Real-time Web3 intelligence</span>
                 <br />
                 built for serious decision-making
@@ -75,11 +77,12 @@ const Landing = () => {
                 teams, analysts, and global organizations.
               </p>
 
-              <div className="mt-4 max-w-2xl rounded-2xl border border-slate-800 bg-dark-panel/30 p-4 text-sm leading-7 text-slate-300">
-                Recruiters, reviewers, and visitors can explore the platform
-                without creating an account. When you want to actually use the
-                system with organization roles, workspace access, and protected
-                actions, enter through the workspace flow.
+              <div className="mt-4 max-w-2xl rounded-2xl border border-slate-800 bg-slate-900/30 p-4 text-sm leading-7 text-slate-300">
+                Reviewers, recruiters, and visitors can explore the public parts
+                of the platform without creating an account. Public access is limited to
+                Home, Search AI, AI Agent, Projects, and Competitors. To actually use
+                the workspace system with roles, approvals, ownership, and protected services,
+                continue through the organization flow.
               </div>
 
               <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:flex-wrap">
@@ -89,7 +92,7 @@ const Landing = () => {
                 </Link>
 
                 <Link to="/dashboard" className="btn-secondary">
-                  Explore Platform
+                  Explore Home
                 </Link>
 
                 <Link to="/projects" className="btn-secondary">
@@ -117,14 +120,14 @@ const Landing = () => {
               </div>
             </div>
 
-            {/* Right column – Live Intelligence Snapshot */}
+            {/* Right column */}
             <div className="glass-card p-6 md:p-8">
               <div className="mb-6 flex items-center justify-between">
                 <div>
                   <div className="text-sm font-semibold text-brand-400">
                     Opportunity Radar
                   </div>
-                  <div className="text-2xl font-black text-dark-text">
+                  <div className="text-2xl font-black text-white">
                     Live Intelligence Snapshot
                   </div>
                 </div>
@@ -145,11 +148,11 @@ const Landing = () => {
                 ].map((item) => (
                   <div
                     key={item.name}
-                    className="rounded-2xl border border-slate-800 bg-dark-panel/50 p-4 transition hover:border-brand-500/30"
+                    className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4 transition hover:border-brand-500/30"
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <div className="font-bold text-dark-text">{item.name}</div>
+                        <div className="font-bold text-white">{item.name}</div>
                         <div className="mt-1 text-sm text-slate-400">{item.tag}</div>
                       </div>
                       <div className="text-xl font-black text-brand-400">
@@ -160,7 +163,7 @@ const Landing = () => {
                 ))}
               </div>
 
-              <div className="mt-6 rounded-2xl border border-brand-500/20 bg-dark-panel/30 p-5 backdrop-blur-sm">
+              <div className="mt-6 rounded-2xl border border-brand-500/20 bg-slate-900/30 p-5 backdrop-blur-sm">
                 <div className="flex items-center gap-2 text-sm font-semibold text-brand-400">
                   <FiActivity className="h-4 w-4" />
                   AI briefing
@@ -179,41 +182,62 @@ const Landing = () => {
       {/* Explore Section */}
       <section className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <div className="mb-8 text-center">
-          <h2 className="text-3xl font-black tracking-tight text-dark-text">
+          <h2 className="text-3xl font-black tracking-tight text-white">
             Explore the platform before signing in
           </h2>
           <p className="mx-auto mt-3 max-w-3xl text-slate-400">
-            Anyone reviewing the product can open the main pages and inspect the
-            interface. Login is only needed for protected organization features,
-            member controls, billing, API keys, watchlists, and workspace use.
+            Anyone reviewing the product can open the public pages and inspect the
+            interface. Protected workspace actions only unlock after organization
+            access, owner approval, or invite acceptance.
           </p>
         </div>
 
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-5">
           <QuickLinkCard
             to="/dashboard"
             icon={FiGrid}
-            title="Explore Dashboard"
-            text="Open the public dashboard preview and inspect the product flow."
+            title="Home"
+            text="Open the public home preview and inspect the product."
             primary
           />
           <QuickLinkCard
             to="/projects"
             icon={FiFolder}
-            title="Browse Projects"
-            text="Review project listings, details, and research presentation."
+            title="Projects"
+            text="Review project listings, project detail pages, and intelligence views."
           />
+          <QuickLinkCard
+            to="/competitors"
+            icon={FiUsers}
+            title="Competitors"
+            text="Inspect competitor-focused public analysis pages."
+          />
+          <QuickLinkCard
+            to="/search-intel"
+            icon={FiSearch}
+            title="Search AI"
+            text="Use the public AI-assisted search experience."
+          />
+          <QuickLinkCard
+            to="/agent"
+            icon={FiMessageSquare}
+            title="AI Agent"
+            text="Open the public AI agent preview page."
+          />
+        </div>
+
+        <div className="mt-5 grid gap-5 md:grid-cols-2">
           <QuickLinkCard
             to="/organizations"
             icon={FiUsers}
             title="Workspace Access"
-            text="Create or join an organization for real usage and role-based access."
+            text="Create or join an organization for real usage, roles, approval, and protected services."
           />
           <QuickLinkCard
             to="/login"
             icon={FiLogIn}
             title="Sign In"
-            text="Return as an owner, admin, analyst, or viewer."
+            text="Return as an owner, admin, analyst, or viewer after approval."
           />
         </div>
       </section>
@@ -221,7 +245,7 @@ const Landing = () => {
       {/* Features Section */}
       <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
         <div className="mb-10 text-center">
-          <h2 className="text-4xl font-black tracking-tight">
+          <h2 className="text-4xl font-black tracking-tight text-white">
             <span className="gradient-text">Built for modern intelligence teams</span>
           </h2>
           <p className="mx-auto mt-3 max-w-2xl text-slate-400">

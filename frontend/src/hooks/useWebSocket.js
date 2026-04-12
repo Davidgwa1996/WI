@@ -9,17 +9,27 @@ const RAW_WS_URL =
   import.meta.env.VITE_WS_URL ||
   "wss://wi-production-ae1c.up.railway.app/ws";
 
-const BASE_WS_URL = RAW_WS_URL.replace(/\/+$/, "");
+const BASE_WS_URL = String(RAW_WS_URL || "").replace(/\/+$/, "");
 
 // ------------------------------------------------------------
 // Helpers
 // ------------------------------------------------------------
+const normalizePath = (path = "") => {
+  if (!path || path === "/") return "";
+  return path.startsWith("/") ? path : `/${path}`;
+};
+
 const buildWsUrl = (path = "") => {
-  if (!path || path === "/") return BASE_WS_URL;
+  const cleanPath = normalizePath(path);
 
-  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  if (!cleanPath) {
+    return BASE_WS_URL;
+  }
 
-  // If BASE_WS_URL already ends with /ws, don't duplicate it
+  if (BASE_WS_URL.endsWith(cleanPath)) {
+    return BASE_WS_URL;
+  }
+
   if (BASE_WS_URL.endsWith("/ws") && cleanPath === "/ws") {
     return BASE_WS_URL;
   }
@@ -35,21 +45,82 @@ const safeJsonParse = (value) => {
   }
 };
 
+const getStoredToken = () => {
+  return (
+    localStorage.getItem("w3i_token") ||
+    localStorage.getItem("token") ||
+    localStorage.getItem("access_token") ||
+    localStorage.getItem("auth_token") ||
+    ""
+  );
+};
+
 // ------------------------------------------------------------
 // Main hook
 // ------------------------------------------------------------
-export const useWebSocket = (path = "") => {
+export const useWebSocket = (path = "", options = {}) => {
+  const {
+    enabled = true,
+    reconnect = true,
+    reconnectDelay = 3000,
+    pingInterval = 25000,
+    debug = false,
+  } = options;
+
   const [isConnected, setIsConnected] = useState(false);
   const [lastMessage, setLastMessage] = useState(null);
   const [lastJsonMessage, setLastJsonMessage] = useState(null);
+  const [connectionError, setConnectionError] = useState("");
 
   const wsRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
   const pingIntervalRef = useRef(null);
   const manuallyClosedRef = useRef(false);
+  const reconnectAttemptsRef = useRef(0);
+
+  const clearReconnectTimer = () => {
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+  };
+
+  const clearPingTimer = () => {
+    if (pingIntervalRef.current) {
+      clearInterval(pingIntervalRef.current);
+      pingIntervalRef.current = null;
+    }
+  };
+
+  const closeSocket = useCallback(() => {
+    clearReconnectTimer();
+    clearPingTimer();
+
+    if (wsRef.current) {
+      try {
+        wsRef.current.close();
+      } catch (error) {
+        if (debug) {
+          console.warn("[WebSocket] Close warning:", error);
+        }
+      }
+      wsRef.current = null;
+    }
+
+    setIsConnected(false);
+  }, [debug]);
 
   const connect = useCallback(() => {
+    if (!enabled || !BASE_WS_URL) {
+      return;
+    }
+
     const url = buildWsUrl(path);
+
+    if (!url) {
+      setConnectionError("WebSocket URL is not configured.");
+      return;
+    }
 
     if (
       wsRef.current &&
@@ -60,34 +131,49 @@ export const useWebSocket = (path = "") => {
     }
 
     try {
-      const ws = new WebSocket(url);
+      manuallyClosedRef.current = false;
+      clearReconnectTimer();
+
+      const token = getStoredToken();
+
+      // Future-friendly token support if backend later reads query params.
+      const finalUrl =
+        token && !url.includes("token=")
+          ? `${url}${url.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}`
+          : url;
+
+      if (debug) {
+        console.log("[WebSocket] Connecting:", finalUrl);
+      }
+
+      const ws = new WebSocket(finalUrl);
 
       ws.onopen = () => {
-        console.log("[WebSocket] Connected:", url);
+        if (debug) {
+          console.log("[WebSocket] Connected:", finalUrl);
+        }
+
+        reconnectAttemptsRef.current = 0;
+        setConnectionError("");
         setIsConnected(true);
 
-        if (reconnectTimeoutRef.current) {
-          clearTimeout(reconnectTimeoutRef.current);
-          reconnectTimeoutRef.current = null;
-        }
+        clearReconnectTimer();
+        clearPingTimer();
 
-        if (pingIntervalRef.current) {
-          clearInterval(pingIntervalRef.current);
-        }
-
-        // Match backend behavior: backend expects plain "ping"
         pingIntervalRef.current = setInterval(() => {
           if (ws.readyState === WebSocket.OPEN) {
             ws.send("ping");
           }
-        }, 25000);
+        }, pingInterval);
       };
 
       ws.onmessage = (event) => {
         const raw = event.data;
         const parsed = safeJsonParse(raw);
 
-        console.log("[WebSocket] Message:", parsed);
+        if (debug) {
+          console.log("[WebSocket] Message:", parsed);
+        }
 
         setLastMessage(raw);
         setLastJsonMessage(
@@ -97,142 +183,144 @@ export const useWebSocket = (path = "") => {
         );
       };
 
-      ws.onerror = (error) => {
-        console.error("[WebSocket] Error:", error);
+      ws.onerror = () => {
+        if (debug) {
+          console.warn("[WebSocket] Connection error");
+        }
       };
 
-      ws.onclose = () => {
-        console.log("[WebSocket] Disconnected");
+      ws.onclose = (event) => {
+        if (debug) {
+          console.log("[WebSocket] Disconnected:", event.code, event.reason || "");
+        }
+
         setIsConnected(false);
+        clearPingTimer();
 
-        if (pingIntervalRef.current) {
-          clearInterval(pingIntervalRef.current);
-          pingIntervalRef.current = null;
+        if (manuallyClosedRef.current || !enabled || !reconnect) {
+          return;
         }
 
-        if (!manuallyClosedRef.current) {
-          reconnectTimeoutRef.current = setTimeout(() => {
-            console.log("[WebSocket] Reconnecting...");
-            connect();
-          }, 3000);
-        }
+        reconnectAttemptsRef.current += 1;
+
+        reconnectTimeoutRef.current = setTimeout(() => {
+          connect();
+        }, reconnectDelay);
       };
 
       wsRef.current = ws;
     } catch (error) {
-      console.error("[WebSocket] Connection failed:", error);
+      setConnectionError(error?.message || "WebSocket connection failed");
+
+      if (debug) {
+        console.error("[WebSocket] Connection failed:", error);
+      }
     }
-  }, [path]);
+  }, [enabled, path, reconnect, reconnectDelay, pingInterval, debug]);
 
   useEffect(() => {
-    manuallyClosedRef.current = false;
+    if (!enabled) {
+      manuallyClosedRef.current = true;
+      closeSocket();
+      return;
+    }
+
     connect();
 
     return () => {
       manuallyClosedRef.current = true;
-
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-        reconnectTimeoutRef.current = null;
-      }
-
-      if (pingIntervalRef.current) {
-        clearInterval(pingIntervalRef.current);
-        pingIntervalRef.current = null;
-      }
-
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
+      closeSocket();
     };
-  }, [connect]);
+  }, [enabled, connect, closeSocket]);
 
-  const sendMessage = useCallback((data) => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-      console.warn("[WebSocket] Not connected");
-      return false;
-    }
+  const sendMessage = useCallback(
+    (data) => {
+      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+        if (debug) {
+          console.warn("[WebSocket] Not connected");
+        }
+        return false;
+      }
 
-    try {
-      const payload =
-        typeof data === "string" ? data : JSON.stringify(data);
-      wsRef.current.send(payload);
-      return true;
-    } catch (error) {
-      console.error("[WebSocket] Send failed:", error);
-      return false;
-    }
-  }, []);
+      try {
+        const payload = typeof data === "string" ? data : JSON.stringify(data);
+        wsRef.current.send(payload);
+        return true;
+      } catch (error) {
+        if (debug) {
+          console.error("[WebSocket] Send failed:", error);
+        }
+        return false;
+      }
+    },
+    [debug]
+  );
 
   return {
     isConnected,
     lastMessage,
     lastJsonMessage,
+    connectionError,
     sendMessage,
   };
 };
 
 // ------------------------------------------------------------
 // Project updates
-// Matches backend event shape:
-// {
-//   type: "full_update",
-//   message: "...",
-//   data: { project_id: 1, ... }
-// }
 // ------------------------------------------------------------
-export const useProjectUpdates = (projectId) => {
+export const useProjectUpdates = (projectId, options = {}) => {
   const [updates, setUpdates] = useState([]);
-  const { isConnected, lastJsonMessage } = useWebSocket("/ws");
+  const { isConnected, lastJsonMessage, connectionError } = useWebSocket("/ws", options);
 
   useEffect(() => {
     if (!lastJsonMessage || !projectId) return;
 
     if (
       lastJsonMessage.type === "full_update" &&
-      lastJsonMessage.data?.project_id === projectId
+      Number(lastJsonMessage.data?.project_id) === Number(projectId)
     ) {
-      setUpdates((prev) => [lastJsonMessage, ...prev]);
+      setUpdates((prev) => [lastJsonMessage, ...prev].slice(0, 30));
     }
   }, [lastJsonMessage, projectId]);
 
-  return { updates, isConnected };
+  return { updates, isConnected, connectionError };
 };
 
 // ------------------------------------------------------------
 // Competitor updates
-// Backend currently does not expose competitor websocket events.
-// This is kept for future compatibility only.
 // ------------------------------------------------------------
-export const useCompetitorUpdates = () => {
+export const useCompetitorUpdates = (options = {}) => {
   const [competitors, setCompetitors] = useState([]);
-  const { isConnected, lastJsonMessage } = useWebSocket("/ws");
+  const { isConnected, lastJsonMessage, connectionError } = useWebSocket("/ws", options);
 
   useEffect(() => {
     if (!lastJsonMessage) return;
 
     if (lastJsonMessage.type === "competitor_update") {
-      setCompetitors((prev) => [
-        ...(lastJsonMessage.data ? [lastJsonMessage.data] : []),
-        ...prev,
-      ]);
+      setCompetitors((prev) => {
+        const next = lastJsonMessage.data ? [lastJsonMessage.data, ...prev] : prev;
+        return next.slice(0, 30);
+      });
     }
   }, [lastJsonMessage]);
 
-  return { competitors, isConnected };
+  return { competitors, isConnected, connectionError };
 };
 
 // ------------------------------------------------------------
 // General dashboard stream
-// Useful for dashboard pages handling all live event types
 // ------------------------------------------------------------
-export const useDashboardStream = () => {
+export const useDashboardStream = (options = {}) => {
   const [alerts, setAlerts] = useState([]);
   const [insights, setInsights] = useState([]);
   const [projectEvents, setProjectEvents] = useState([]);
 
-  const { isConnected, lastJsonMessage, sendMessage } = useWebSocket("/ws");
+  const {
+    isConnected,
+    lastJsonMessage,
+    sendMessage,
+    connectionError,
+  } = useWebSocket("/ws", options);
 
   useEffect(() => {
     if (!lastJsonMessage) return;
@@ -268,6 +356,7 @@ export const useDashboardStream = () => {
     alerts,
     insights,
     projectEvents,
+    connectionError,
     sendMessage,
   };
 };

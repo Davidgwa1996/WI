@@ -47,7 +47,7 @@ const PRIMARY_TOKEN_KEY = "w3i_token";
 console.log("[API] Using API URL:", API_BASE_URL);
 
 // ============================================
-// Simple Cache for GET requests
+// Cache
 // ============================================
 
 const cache = new Map();
@@ -423,7 +423,8 @@ export const watchlistsAPI = {
       useCache: false,
     }),
   getItems: (watchlistId) => fetchAPI(`/watchlists/${watchlistId}/items`),
-  getLiveMetrics: (watchlistId) => fetchAPI(`/watchlists/${watchlistId}/live`, { useCache: false }),
+  getLiveMetrics: (watchlistId) =>
+    fetchAPI(`/watchlists/${watchlistId}/live`, { useCache: false }),
   getChanges: (watchlistId, hours = 24) =>
     fetchAPI(`/watchlists/${watchlistId}/changes?hours=${hours}`),
   getAlerts: (watchlistId) => fetchAPI(`/watchlists/${watchlistId}/alerts`),
@@ -536,6 +537,12 @@ export const usersAPI = {
       body: payload,
       useCache: false,
     }),
+
+  deleteUser: (userId) =>
+    fetchAPI(`/admin/users/${userId}`, {
+      method: "DELETE",
+      useCache: false,
+    }),
 };
 
 export const auditAPI = {
@@ -604,11 +611,6 @@ export const adminAPI = {
       useCache: false,
     }),
 
-  /**
-   * Supports both common backend patterns:
-   * - DELETE /admin/my-account
-   * - DELETE /users/me
-   */
   deleteMyAccount: async (payload = { confirm: "DELETE" }) => {
     try {
       return await fetchAPI("/users/me", {

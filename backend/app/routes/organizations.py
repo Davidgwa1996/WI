@@ -7,7 +7,19 @@ from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user
 from app.database import get_db
-from app.models import Organization, User
+from app.models import (
+    APIKey,
+    AuditLog,
+    Briefing,
+    Organization,
+    Project,
+    SavedReport,
+    TeamInvite,
+    User,
+    Watchlist,
+    WatchlistItem,
+    WorkspaceSetting,
+)
 from app.schemas import ApiMessage, BulkDeleteRequest, OrganizationOut
 
 router = APIRouter(prefix="/organizations", tags=["organizations"])
@@ -37,7 +49,69 @@ def can_manage_org(current_user: User, org_id: int) -> bool:
     """Super admin can manage any org; owner can manage only their own."""
     if is_super_admin(current_user):
         return True
-    return current_user.role == "owner" and current_user.organization_id == org_id
+    return (
+        current_user is not None
+        and (current_user.role or "").lower() == "owner"
+        and current_user.organization_id == org_id
+    )
+
+
+def _delete_organization_dependencies(db: Session, org_id: int) -> None:
+    """
+    Delete organization-related records in a safe order to avoid FK violations.
+    """
+
+    # Watchlist items first
+    db.query(WatchlistItem).filter(
+        WatchlistItem.watchlist_id.in_(
+            db.query(Watchlist.id).filter(Watchlist.organization_id == org_id)
+        )
+    ).delete(synchronize_session=False)
+
+    # Watchlists
+    db.query(Watchlist).filter(
+        Watchlist.organization_id == org_id
+    ).delete(synchronize_session=False)
+
+    # Projects
+    db.query(Project).filter(
+        Project.organization_id == org_id
+    ).delete(synchronize_session=False)
+
+    # API keys
+    db.query(APIKey).filter(
+        APIKey.organization_id == org_id
+    ).delete(synchronize_session=False)
+
+    # Audit logs
+    db.query(AuditLog).filter(
+        AuditLog.organization_id == org_id
+    ).delete(synchronize_session=False)
+
+    # Invites
+    db.query(TeamInvite).filter(
+        TeamInvite.organization_id == org_id
+    ).delete(synchronize_session=False)
+
+    # Briefings
+    db.query(Briefing).filter(
+        Briefing.organization_id == org_id
+    ).delete(synchronize_session=False)
+
+    # Saved reports
+    db.query(SavedReport).filter(
+        SavedReport.organization_id == org_id
+    ).delete(synchronize_session=False)
+
+    # Workspace settings
+    db.query(WorkspaceSetting).filter(
+        WorkspaceSetting.organization_id == org_id
+    ).delete(synchronize_session=False)
+
+    # Users last
+    db.query(User).filter(
+        User.organization_id == org_id
+    ).delete(synchronize_session=False)
 
 
 @router.get("/me", response_model=OrganizationOut)
@@ -74,7 +148,7 @@ def list_all_organizations(
     if is_super_admin(current_user):
         return db.query(Organization).order_by(Organization.created_at.desc()).all()
 
-    if current_user.role != "owner":
+    if (current_user.role or "").lower() != "owner":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only owners or super admins can list organizations",
@@ -101,7 +175,7 @@ def bulk_delete_organizations(
     """
     _ensure_db(db)
 
-    org_ids = payload.org_ids
+    org_ids = list(set(payload.org_ids))
     if not org_ids:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -109,14 +183,14 @@ def bulk_delete_organizations(
         )
 
     orgs = db.query(Organization).filter(Organization.id.in_(org_ids)).all()
-    if len(orgs) != len(set(org_ids)):
+    if len(orgs) != len(org_ids):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="One or more organizations not found",
         )
 
     if not is_super_admin(current_user):
-        if current_user.role != "owner":
+        if (current_user.role or "").lower() != "owner":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Only owners or super admins can delete organizations",
@@ -131,8 +205,11 @@ def bulk_delete_organizations(
 
     try:
         deleted_count = len(orgs)
+
         for org in orgs:
+            _delete_organization_dependencies(db, org.id)
             db.delete(org)
+
         db.commit()
 
         return ApiMessage(
@@ -174,8 +251,11 @@ def delete_organization(
 
     try:
         org_name = org.name
+
+        _delete_organization_dependencies(db, org.id)
         db.delete(org)
         db.commit()
+
         return ApiMessage(message=f"Organization '{org_name}' deleted successfully")
     except Exception as e:
         db.rollback()
