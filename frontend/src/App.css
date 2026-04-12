@@ -1,5 +1,5 @@
 /* src/App.css */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap");
 
 * {
   margin: 0;
@@ -7,11 +7,61 @@
   box-sizing: border-box;
 }
 
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background: #f8fafc;
   color: #111827;
   overflow-x: hidden;
+  line-height: 1.5;
+}
+
+/* ============================================
+   GLOBAL SURFACES
+   ============================================ */
+.landing-page {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(6, 182, 212, 0.16), transparent 30%),
+    radial-gradient(circle at top right, rgba(45, 212, 191, 0.12), transparent 28%),
+    linear-gradient(180deg, #0a0a0f 0%, #0f172a 100%);
+  color: #f8fafc;
+}
+
+.app-page {
+  min-height: 100vh;
+  background: #f8fafc;
+  color: #111827;
+}
+
+.app-content {
+  min-height: 100vh;
+  background: #f8fafc;
+}
+
+.app-panel {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 1.5rem;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+}
+
+.app-panel-soft {
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 1.25rem;
+}
+
+.app-panel-dark {
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 1.5rem;
+  color: #f8fafc;
 }
 
 /* ============================================
@@ -23,7 +73,7 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: #f1f5f9;
   border-radius: 10px;
 }
 
@@ -39,11 +89,14 @@ body {
 /* ============================================
    SMOOTH TRANSITIONS
    ============================================ */
-.stat-card, 
-button, 
+.stat-card,
+button,
 .project-card,
 .glass-card,
-.watchlist-card {
+.watchlist-card,
+.app-panel,
+.app-panel-soft,
+.action-btn {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -95,7 +148,8 @@ button,
 }
 
 @keyframes pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
   }
   50% {
@@ -104,8 +158,8 @@ button,
 }
 
 @keyframes spin {
-  to { 
-    transform: rotate(360deg); 
+  to {
+    transform: rotate(360deg);
   }
 }
 
@@ -119,7 +173,8 @@ button,
 }
 
 @keyframes glow {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow: 0 0 5px rgba(6, 182, 212, 0.2);
   }
   50% {
@@ -145,7 +200,7 @@ button,
 .stat-card:nth-child(4) { animation-delay: 0.2s; }
 
 /* ============================================
-   GLASS MORPHISM EFFECTS
+   GLASS / LANDING EFFECTS
    ============================================ */
 .glass-effect {
   background: rgba(255, 255, 255, 0.7);
@@ -153,25 +208,23 @@ button,
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-/* Glass Card - Main component style for WatchlistCard */
 .glass-card {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
+  background: rgba(17, 24, 39, 0.82);
+  backdrop-filter: blur(12px);
   border-radius: 1.5rem;
-  border: 1px solid rgba(226, 232, 240, 0.8);
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 
-              0 2px 4px -1px rgba(0, 0, 0, 0.03);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid rgba(6, 182, 212, 0.2);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+  color: #f8fafc;
 }
 
 .glass-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 
-              0 10px 10px -5px rgba(0, 0, 0, 0.02);
-  border-color: rgba(6, 182, 212, 0.3);
+  box-shadow:
+    0 20px 25px -5px rgba(0, 0, 0, 0.25),
+    0 10px 10px -5px rgba(0, 0, 0, 0.12);
+  border-color: rgba(6, 182, 212, 0.35);
 }
 
-/* Glass Card Dark Variant */
 .glass-card-dark {
   background: rgba(15, 23, 42, 0.95);
   backdrop-filter: blur(10px);
@@ -181,21 +234,42 @@ button,
   color: #f1f5f9;
 }
 
-/* Glass Card with Glow Effect */
 .glass-card-glow {
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(17, 24, 39, 0.9);
   backdrop-filter: blur(10px);
   border-radius: 1.5rem;
   border: 1px solid rgba(6, 182, 212, 0.3);
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
   animation: glow 2s infinite;
+  color: #f8fafc;
+}
+
+/* ============================================
+   INTERNAL PAGE CARDS
+   ============================================ */
+.content-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 1.25rem;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+}
+
+.content-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.1);
+}
+
+.section-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 1rem;
 }
 
 /* ============================================
    GRADIENT TEXT
    ============================================ */
 .gradient-text {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -216,6 +290,185 @@ button,
 }
 
 /* ============================================
+   BUTTONS
+   ============================================ */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 0.95rem 1.5rem;
+  border-radius: 9999px;
+  font-weight: 700;
+  text-decoration: none;
+  color: #ffffff;
+  background: linear-gradient(90deg, #06b6d4 0%, #14b8a6 100%);
+  box-shadow: 0 10px 24px rgba(6, 182, 212, 0.24);
+  border: none;
+  cursor: pointer;
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 30px rgba(6, 182, 212, 0.34);
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 0.95rem 1.5rem;
+  border-radius: 9999px;
+  font-weight: 700;
+  text-decoration: none;
+  color: #f8fafc;
+  background: rgba(15, 23, 42, 0.28);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+}
+
+.btn-secondary:hover {
+  border-color: rgba(34, 211, 238, 0.4);
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.btn-light {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 0.9rem 1.2rem;
+  border-radius: 0.9rem;
+  font-weight: 700;
+  color: #0f172a;
+  background: #ffffff;
+  border: 1px solid #dbe3ef;
+  cursor: pointer;
+}
+
+.btn-light:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.btn-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 0.85rem 1.2rem;
+  border-radius: 0.9rem;
+  font-weight: 700;
+  color: #ffffff;
+  background: #dc2626;
+  border: none;
+  cursor: pointer;
+}
+
+.btn-danger:hover {
+  background: #b91c1c;
+}
+
+/* ============================================
+   PAGE ACTIONS / VISIBILITY FIX
+   ============================================ */
+.page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0.85rem 1.1rem;
+  border-radius: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.action-btn.primary {
+  background: #0f172a;
+  color: #ffffff;
+}
+
+.action-btn.primary:hover {
+  background: #111827;
+}
+
+.action-btn.secondary {
+  background: #ffffff;
+  color: #0f172a;
+  border-color: #d1d5db;
+}
+
+.action-btn.secondary:hover {
+  background: #f8fafc;
+}
+
+.action-btn.refresh {
+  background: #14b8a6;
+  color: #ffffff;
+}
+
+.action-btn.refresh:hover {
+  background: #0d9488;
+}
+
+.action-btn.danger {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.action-btn.danger:hover {
+  background: #b91c1c;
+}
+
+/* ============================================
+   SIDEBAR / NAV
+   ============================================ */
+.app-sidebar {
+  background: #ffffff;
+  border-right: 1px solid #e5e7eb;
+}
+
+.sidebar-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 1.25rem;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  text-decoration: none;
+  color: #334155;
+  font-weight: 600;
+}
+
+.nav-link:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.nav-link.active {
+  background: rgba(6, 182, 212, 0.1);
+  color: #0891b2;
+  border: 1px solid rgba(6, 182, 212, 0.16);
+}
+
+/* ============================================
    HOVER EFFECTS
    ============================================ */
 .hover-lift {
@@ -224,8 +477,9 @@ button,
 
 .hover-lift:hover {
   transform: translateY(-4px);
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 
-              0 10px 10px -5px rgba(0, 0, 0, 0.02);
+  box-shadow:
+    0 20px 25px -5px rgba(0, 0, 0, 0.1),
+    0 10px 10px -5px rgba(0, 0, 0, 0.02);
 }
 
 .hover-scale {
@@ -237,8 +491,8 @@ button,
 }
 
 .hover-glow:hover {
-  box-shadow: 0 0 15px rgba(6, 182, 212, 0.3);
-  border-color: rgba(6, 182, 212, 0.5);
+  box-shadow: 0 0 15px rgba(6, 182, 212, 0.2);
+  border-color: rgba(6, 182, 212, 0.4);
 }
 
 /* ============================================
@@ -274,7 +528,6 @@ button,
   color: #ef4444;
 }
 
-/* Conviction Score Badges */
 .score-high {
   background: rgba(16, 185, 129, 0.1);
   color: #10b981;
@@ -297,6 +550,73 @@ button,
   background: rgba(239, 68, 68, 0.1);
   color: #ef4444;
   border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+/* ============================================
+   FORMS
+   ============================================ */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #dbe3ef;
+  background: #ffffff;
+  color: #111827;
+  outline: none;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  border-color: rgba(6, 182, 212, 0.5);
+  box-shadow: 0 0 0 4px rgba(6, 182, 212, 0.08);
+}
+
+/* ============================================
+   DANGER ZONE
+   ============================================ */
+.danger-zone {
+  background: #fff5f5;
+  border: 1px solid rgba(239, 68, 68, 0.18);
+  border-radius: 1.25rem;
+  padding: 20px;
+}
+
+.danger-zone h2,
+.danger-zone h3 {
+  color: #b91c1c;
+}
+
+.danger-zone p {
+  color: #7f1d1d;
+}
+
+.error-text {
+  color: #dc2626;
+  font-size: 14px;
+  margin-top: 10px;
+}
+
+.success-text {
+  color: #059669;
+  font-size: 14px;
+  margin-top: 10px;
 }
 
 /* ============================================
@@ -325,7 +645,6 @@ button,
   border-top-color: #ffffff;
 }
 
-/* Skeleton Loading */
 .skeleton {
   background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
   background-size: 200% 100%;
@@ -344,7 +663,7 @@ button,
 }
 
 .live-dot::before {
-  content: '';
+  content: "";
   width: 8px;
   height: 8px;
   background-color: #10b981;
@@ -356,32 +675,45 @@ button,
 /* ============================================
    RESPONSIVE DESIGN
    ============================================ */
+@media (max-width: 1024px) {
+  .page-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 @media (max-width: 768px) {
   .dashboard-header {
     flex-direction: column;
     gap: 16px;
     text-align: center;
   }
-  
+
   .stats-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .charts-grid {
     grid-template-columns: 1fr;
   }
-  
-  .glass-card {
+
+  .glass-card,
+  .app-panel,
+  .content-card {
     border-radius: 1rem;
   }
 }
 
 @media (max-width: 640px) {
-  .glass-card {
+  .glass-card,
+  .app-panel,
+  .content-card {
     border-radius: 0.75rem;
   }
-  
-  .glass-card .p-6 {
+
+  .glass-card .p-6,
+  .app-panel .p-6,
+  .content-card .p-6 {
     padding: 1rem;
   }
 }
@@ -389,7 +721,6 @@ button,
 /* ============================================
    UTILITY CLASSES
    ============================================ */
-/* Text truncation */
 .line-clamp-1 {
   display: -webkit-box;
   -webkit-line-clamp: 1;
@@ -411,7 +742,6 @@ button,
   overflow: hidden;
 }
 
-/* Hide scrollbar */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
@@ -421,7 +751,6 @@ button,
   scrollbar-width: none;
 }
 
-/* Backdrop blur utilities */
 .backdrop-blur-sm {
   backdrop-filter: blur(4px);
 }
@@ -439,21 +768,24 @@ button,
 }
 
 /* ============================================
-   DARK MODE SUPPORT (Optional)
+   OPTIONAL DARK MODE
    ============================================ */
 @media (prefers-color-scheme: dark) {
   body.dark-mode {
     background: #0f172a;
     color: #f1f5f9;
   }
-  
-  body.dark-mode .glass-card {
+
+  body.dark-mode .content-card,
+  body.dark-mode .app-panel {
     background: rgba(30, 41, 59, 0.95);
     border-color: rgba(51, 65, 85, 0.8);
+    color: #f1f5f9;
   }
-  
-  body.dark-mode .glass-card:hover {
-    border-color: rgba(6, 182, 212, 0.3);
+
+  body.dark-mode .app-page {
+    background: #0f172a;
+    color: #f1f5f9;
   }
 }
 
@@ -461,12 +793,15 @@ button,
    PRINT STYLES
    ============================================ */
 @media print {
-  .glass-card {
+  .glass-card,
+  .content-card,
+  .app-panel {
     background: white;
     box-shadow: none;
     border: 1px solid #e2e8f0;
+    color: #111827;
   }
-  
+
   .no-print {
     display: none;
   }

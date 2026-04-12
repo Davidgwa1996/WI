@@ -2,8 +2,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import { AuthProvider } from "./context/AuthContext";
-import PublicRoute from "./components/auth/PublicRoute";
-import RoleGuard from "./components/auth/RoleGuard";
 
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
@@ -31,10 +29,62 @@ import AuditLogs from "./pages/AuditLogs";
 import AdminRoles from "./pages/AdminRoles";
 import ApiDocsPage from "./pages/ApiDocsPage";
 import Organizations from "./pages/Organizations";
-import AdminPanel from "./pages/AdminPanel"; // Super admin panel
+import AdminPanel from "./pages/AdminPanel";
 
 import ErrorBoundary from "./components/ErrorBoundary";
 import "./index.css";
+
+function getStoredUser() {
+  try {
+    return (
+      JSON.parse(localStorage.getItem("user")) ||
+      JSON.parse(localStorage.getItem("auth_user")) ||
+      JSON.parse(localStorage.getItem("currentUser")) ||
+      null
+    );
+  } catch {
+    return null;
+  }
+}
+
+function getStoredToken() {
+  return (
+    localStorage.getItem("token") ||
+    localStorage.getItem("access_token") ||
+    localStorage.getItem("auth_token") ||
+    ""
+  );
+}
+
+function RequireAuth({ children }) {
+  const token = getStoredToken();
+  const user = getStoredUser();
+
+  if (!token && !user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return children;
+}
+
+function RequireRole({ roles = [], children }) {
+  const token = getStoredToken();
+  const user = getStoredUser();
+
+  if (!token && !user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!user?.role) {
+    return <Navigate to="/organizations" replace />;
+  }
+
+  if (roles.length > 0 && !roles.includes(user.role)) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return children;
+}
 
 function App() {
   return (
@@ -42,194 +92,139 @@ function App() {
       <AuthProvider>
         <BrowserRouter>
           <Routes>
-            {/* Public routes – no authentication required */}
+            {/* Landing only */}
             <Route path="/" element={<Landing />} />
             <Route path="/home" element={<Navigate to="/" replace />} />
+
+            {/* Public access/auth entry */}
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/accept-invite" element={<AcceptInvite />} />
+            <Route path="/organizations" element={<Organizations />} />
 
-            {/* All other routes are publicly viewable (preview mode) */}
-            <Route
-              path="/dashboard"
-              element={
-                <PublicRoute>
-                  <Dashboard />
-                </PublicRoute>
-              }
-            />
-            <Route
-              path="/projects"
-              element={
-                <PublicRoute>
-                  <Projects />
-                </PublicRoute>
-              }
-            />
-            <Route
-              path="/projects/:id"
-              element={
-                <PublicRoute>
-                  <ProjectDetail />
-                </PublicRoute>
-              }
-            />
-            <Route
-              path="/competitors"
-              element={
-                <PublicRoute>
-                  <Competitors />
-                </PublicRoute>
-              }
-            />
+            {/* Public preview routes */}
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/projects" element={<Projects />} />
+            <Route path="/projects/:id" element={<ProjectDetail />} />
+            <Route path="/competitors" element={<Competitors />} />
+            <Route path="/reports" element={<Reports />} />
+            <Route path="/briefings" element={<Briefings />} />
+            <Route path="/search-intel" element={<SearchIntel />} />
+            <Route path="/api-docs" element={<ApiDocsPage />} />
+
+            {/* Protected real-use routes */}
             <Route
               path="/watchlists"
               element={
-                <PublicRoute>
+                <RequireAuth>
                   <Watchlists />
-                </PublicRoute>
-              }
-            />
-            <Route
-              path="/reports"
-              element={
-                <PublicRoute>
-                  <Reports />
-                </PublicRoute>
-              }
-            />
-            <Route
-              path="/briefings"
-              element={
-                <PublicRoute>
-                  <Briefings />
-                </PublicRoute>
-              }
-            />
-            <Route
-              path="/search-intel"
-              element={
-                <PublicRoute>
-                  <SearchIntel />
-                </PublicRoute>
+                </RequireAuth>
               }
             />
             <Route
               path="/agent"
               element={
-                <PublicRoute>
+                <RequireAuth>
                   <AgentChat />
-                </PublicRoute>
+                </RequireAuth>
               }
             />
             <Route
               path="/workspace"
               element={
-                <PublicRoute>
+                <RequireAuth>
                   <WorkspaceSettings />
-                </PublicRoute>
+                </RequireAuth>
               }
             />
             <Route
               path="/team"
               element={
-                <PublicRoute>
+                <RequireAuth>
                   <TeamInvites />
-                </PublicRoute>
-              }
-            />
-            <Route
-              path="/members"
-              element={
-                <PublicRoute>
-                  <RoleGuard roles={["owner", "admin"]}>
-                    <TeamMembers />
-                  </RoleGuard>
-                </PublicRoute>
+                </RequireAuth>
               }
             />
             <Route
               path="/account"
               element={
-                <PublicRoute>
+                <RequireAuth>
                   <Account />
-                </PublicRoute>
+                </RequireAuth>
               }
             />
             <Route
               path="/api-keys"
               element={
-                <PublicRoute>
+                <RequireAuth>
                   <APIKeys />
-                </PublicRoute>
+                </RequireAuth>
               }
             />
             <Route
               path="/billing"
               element={
-                <PublicRoute>
+                <RequireAuth>
                   <Billing />
-                </PublicRoute>
+                </RequireAuth>
               }
             />
             <Route
               path="/billing/success"
               element={
-                <PublicRoute>
+                <RequireAuth>
                   <BillingSuccess />
-                </PublicRoute>
+                </RequireAuth>
               }
             />
             <Route
               path="/billing/cancel"
               element={
-                <PublicRoute>
+                <RequireAuth>
                   <BillingCancel />
-                </PublicRoute>
+                </RequireAuth>
+              }
+            />
+
+            {/* Owner / admin routes */}
+            <Route
+              path="/members"
+              element={
+                <RequireRole roles={["owner", "admin"]}>
+                  <TeamMembers />
+                </RequireRole>
               }
             />
             <Route
               path="/audit-logs"
               element={
-                <PublicRoute>
+                <RequireRole roles={["owner", "admin"]}>
                   <AuditLogs />
-                </PublicRoute>
+                </RequireRole>
               }
             />
             <Route
               path="/admin/roles"
               element={
-                <PublicRoute>
-                  <RoleGuard roles={["owner", "admin"]}>
-                    <AdminRoles />
-                  </RoleGuard>
-                </PublicRoute>
+                <RequireRole roles={["owner", "admin"]}>
+                  <AdminRoles />
+                </RequireRole>
               }
             />
-            <Route
-              path="/api-docs"
-              element={
-                <PublicRoute>
-                  <ApiDocsPage />
-                </PublicRoute>
-              }
-            />
-            <Route
-              path="/organizations"
-              element={
-                <PublicRoute>
-                  <Organizations />
-                </PublicRoute>
-              }
-            />
+
+            {/* Owner only */}
             <Route
               path="/admin"
               element={
-                <PublicRoute>
+                <RequireRole roles={["owner"]}>
                   <AdminPanel />
-                </PublicRoute>
+                </RequireRole>
               }
             />
+
+            {/* Helpful aliases */}
+            <Route path="/launch-workspace" element={<Navigate to="/organizations" replace />} />
+            <Route path="/explore" element={<Navigate to="/dashboard" replace />} />
 
             {/* Fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />

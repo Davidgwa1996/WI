@@ -27,14 +27,12 @@ def validate_strong_password(value: str) -> str:
 
 
 def validate_slug(value: str) -> str:
-    """Validate organization slug format."""
     if not re.match(r"^[a-z0-9-]+$", value):
         raise ValueError("Slug must contain only lowercase letters, numbers, and hyphens")
     return value
 
 
 def validate_role(value: str) -> str:
-    """Validate user role."""
     valid_roles = ["owner", "admin", "analyst", "member", "viewer"]
     if value not in valid_roles:
         raise ValueError(f"Role must be one of: {', '.join(valid_roles)}")
@@ -59,7 +57,7 @@ class HealthResponse(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
-    expires_in: int = 1440  # minutes
+    expires_in: int = 1440
 
 
 # ------------------------------------------------------------
@@ -81,7 +79,7 @@ class RegisterRequest(BaseModel):
     @classmethod
     def password_strength(cls, value: str) -> str:
         return validate_strong_password(value)
-    
+
     @field_validator("organization_slug")
     @classmethod
     def slug_valid(cls, value: str) -> str:
@@ -91,7 +89,7 @@ class RegisterRequest(BaseModel):
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
-    
+
     @field_validator("new_password")
     @classmethod
     def password_strength(cls, value: str) -> str:
@@ -105,14 +103,13 @@ class ForgotPasswordRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str
-    
+
     @field_validator("new_password")
     @classmethod
     def password_strength(cls, value: str) -> str:
         return validate_strong_password(value)
 
 
-# Backward compatibility aliases
 UserLogin = LoginRequest
 UserRegister = RegisterRequest
 
@@ -124,7 +121,7 @@ class OrganizationCreate(BaseModel):
     name: str
     slug: str
     billing_email: Optional[EmailStr] = None
-    
+
     @field_validator("slug")
     @classmethod
     def slug_valid(cls, value: str) -> str:
@@ -173,13 +170,49 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     role: Optional[str] = None
     is_active: Optional[bool] = None
-    
+
     @field_validator("role")
     @classmethod
-    def validate_role(cls, value: Optional[str]) -> Optional[str]:
+    def validate_user_role(cls, value: Optional[str]) -> Optional[str]:
         if value:
             return validate_role(value)
         return value
+
+
+class UserSelfUpdate(BaseModel):
+    full_name: Optional[str] = None
+
+
+class UpdateUserRoleRequest(BaseModel):
+    role: str
+
+    @field_validator("role")
+    @classmethod
+    def validate_user_role(cls, value: str) -> str:
+        return validate_role(value)
+
+
+class DeleteAccountRequest(BaseModel):
+    confirm: str
+
+    @field_validator("confirm")
+    @classmethod
+    def validate_confirm(cls, value: str) -> str:
+        cleaned = value.strip().upper()
+        if cleaned != "DELETE":
+            raise ValueError('confirm must be exactly "DELETE"')
+        return cleaned
+
+
+class DeleteUserResponse(BaseModel):
+    success: bool
+    message: str
+    deleted_user_id: int
+    deleted_email: EmailStr
+    organization_deleted: Optional[bool] = False
+    ownership_transferred: Optional[bool] = False
+    new_owner_user_id: Optional[int] = None
+    new_owner_email: Optional[EmailStr] = None
 
 
 # ------------------------------------------------------------
@@ -291,7 +324,7 @@ class ProjectListItem(BaseModel):
 
 class ProjectHistoryOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    
+
     id: int
     project_id: int
     overall_score: float
@@ -332,7 +365,6 @@ class ApiKeyOut(BaseModel):
     updated_at: datetime
 
 
-# Backward compatibility aliases
 APIKeyCreate = ApiKeyCreate
 APIKeyCreateResponse = ApiKeyCreatedResponse
 APIKeyOut = ApiKeyOut
@@ -370,19 +402,16 @@ class AuditLogOut(BaseModel):
 
 
 # ------------------------------------------------------------
-# Invites (Updated with analyst role)
+# Invites
 # ------------------------------------------------------------
 class InviteCreate(BaseModel):
     email: EmailStr
     role: str = "viewer"
-    
+
     @field_validator("role")
     @classmethod
-    def validate_role(cls, value: str) -> str:
-        valid_roles = ["owner", "admin", "analyst", "member", "viewer"]
-        if value not in valid_roles:
-            raise ValueError(f"Role must be one of: {', '.join(valid_roles)}")
-        return value
+    def validate_invite_role(cls, value: str) -> str:
+        return validate_role(value)
 
 
 class InviteOut(BaseModel):
@@ -454,7 +483,7 @@ class BillingPortalRequest(BaseModel):
 
 
 # ------------------------------------------------------------
-# Watchlists (Enhanced with Real-time Features)
+# Watchlists
 # ------------------------------------------------------------
 class WatchlistItemCreate(BaseModel):
     project_id: int
@@ -714,7 +743,6 @@ class ExportResponse(BaseModel):
 # File Uploads
 # ------------------------------------------------------------
 class FileUploadResponse(BaseModel):
-    """Response schema for file uploads."""
     filename: str
     saved_name: str
     url: str
@@ -724,8 +752,7 @@ class FileUploadResponse(BaseModel):
 
 
 # ------------------------------------------------------------
-# Bulk Delete Request (for organizations)
+# Bulk Delete Request
 # ------------------------------------------------------------
 class BulkDeleteRequest(BaseModel):
-    """Request schema for deleting multiple organizations at once."""
     org_ids: List[int]

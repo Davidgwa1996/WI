@@ -1,8 +1,3 @@
--- ============================================================
--- Web3 Intel Platform - Final PostgreSQL Migration
--- File: backend/sql/final_postgresql_migration.sql
--- ============================================================
-
 BEGIN;
 
 -- ------------------------------------------------------------
@@ -21,12 +16,10 @@ CREATE TABLE IF NOT EXISTS organizations (
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
--- Ensure default organization exists for legacy project rows
 INSERT INTO organizations (id, name, slug, plan, is_active, created_at, updated_at)
 VALUES (1, 'Default Organization', 'default-organization', 'starter', TRUE, NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
--- keep sequence aligned
 SELECT setval(
     pg_get_serial_sequence('organizations', 'id'),
     GREATEST((SELECT COALESCE(MAX(id), 1) FROM organizations), 1),
@@ -122,16 +115,20 @@ CREATE TABLE IF NOT EXISTS team_invites (
     invited_by_user_id INTEGER NULL REFERENCES users(id) ON DELETE SET NULL,
     is_accepted BOOLEAN NOT NULL DEFAULT FALSE,
     expires_at TIMESTAMP NOT NULL,
+    accepted_at TIMESTAMP NULL,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE team_invites
+    ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMP NULL;
 
 CREATE INDEX IF NOT EXISTS ix_team_invites_organization_id ON team_invites(organization_id);
 CREATE INDEX IF NOT EXISTS ix_team_invites_email ON team_invites(email);
 CREATE INDEX IF NOT EXISTS ix_team_invites_token ON team_invites(token);
 
 -- ------------------------------------------------------------
--- 7. projects - patch existing table
+-- 7. projects
 -- ------------------------------------------------------------
 ALTER TABLE projects
     ADD COLUMN IF NOT EXISTS organization_id INTEGER,
@@ -144,16 +141,13 @@ ALTER TABLE projects
     ADD COLUMN IF NOT EXISTS created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NOT NULL DEFAULT NOW();
 
--- Backfill legacy rows to default org
 UPDATE projects
 SET organization_id = 1
 WHERE organization_id IS NULL;
 
--- Make organization_id required
 ALTER TABLE projects
     ALTER COLUMN organization_id SET NOT NULL;
 
--- Add foreign key only if missing
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -172,22 +166,53 @@ CREATE INDEX IF NOT EXISTS ix_projects_organization_id ON projects(organization_
 CREATE INDEX IF NOT EXISTS ix_projects_name ON projects(name);
 
 -- ------------------------------------------------------------
--- 8. watchlists
+-- 8. project_history
 -- ------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS watchlists (
+CREATE TABLE IF NOT EXISTS project_history (
     id SERIAL PRIMARY KEY,
-    organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-    name VARCHAR(255) NOT NULL,
-    description TEXT,
-    is_default BOOLEAN NOT NULL DEFAULT FALSE,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    overall_score DOUBLE PRECISION NOT NULL DEFAULT 0,
+    momentum_score DOUBLE PRECISION NOT NULL DEFAULT 0,
+    sentiment_score DOUBLE PRECISION NOT NULL DEFAULT 0,
+    funding_prediction DOUBLE PRECISION NOT NULL DEFAULT 0,
+    twitter_followers INTEGER NOT NULL DEFAULT 0,
+    github_stars INTEGER NOT NULL DEFAULT 0,
+    discord_members INTEGER NOT NULL DEFAULT 0,
+    market_cap DOUBLE PRECISION NOT NULL DEFAULT 0,
+    tvl DOUBLE PRECISION NOT NULL DEFAULT 0,
+    recorded_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    trigger_source VARCHAR(50) NOT NULL DEFAULT 'scraper',
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+CREATE INDEX IF NOT EXISTS idx_project_history_project ON project_history(project_id);
+CREATE INDEX IF NOT EXISTS idx_project_history_recorded ON project_history(recorded_at);
+CREATE INDEX IF NOT EXISTS idx_project_history_project_recorded ON project_history(project_id, recorded_at);
+
+-- ------------------------------------------------------------
+-- 9. watchlists
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS watchlists (
+    id SERIAL PRIMARY KEY,
+    organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    created_by INTEGER NULL REFERENCES users(id) ON DELETE SET NULL,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    is_default BOOLEAN NOT NULL DEFAULT FALSE,
+    settings JSONB NOT NULL DEFAULT '{"alert_on_change": true, "alert_threshold": 5.0, "notification_channels": ["in_app"]}'::jsonb,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE watchlists
+    ADD COLUMN IF NOT EXISTS created_by INTEGER NULL REFERENCES users(id) ON DELETE SET NULL,
+    ADD COLUMN IF NOT EXISTS settings JSONB NOT NULL DEFAULT '{"alert_on_change": true, "alert_threshold": 5.0, "notification_channels": ["in_app"]}'::jsonb;
+
 CREATE INDEX IF NOT EXISTS ix_watchlists_organization_id ON watchlists(organization_id);
 
 -- ------------------------------------------------------------
--- 9. watchlist_items
+-- 10. watchlist_items
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS watchlist_items (
     id SERIAL PRIMARY KEY,
@@ -195,9 +220,13 @@ CREATE TABLE IF NOT EXISTS watchlist_items (
     project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     note TEXT,
     tag VARCHAR(100),
+    added_by INTEGER NULL REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE watchlist_items
+    ADD COLUMN IF NOT EXISTS added_by INTEGER NULL REFERENCES users(id) ON DELETE SET NULL;
 
 CREATE INDEX IF NOT EXISTS ix_watchlist_items_watchlist_id ON watchlist_items(watchlist_id);
 CREATE INDEX IF NOT EXISTS ix_watchlist_items_project_id ON watchlist_items(project_id);
@@ -215,7 +244,7 @@ BEGIN
 END $$;
 
 -- ------------------------------------------------------------
--- 10. saved_reports
+-- 11. saved_reports
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS saved_reports (
     id SERIAL PRIMARY KEY,
@@ -233,7 +262,7 @@ CREATE TABLE IF NOT EXISTS saved_reports (
 CREATE INDEX IF NOT EXISTS ix_saved_reports_organization_id ON saved_reports(organization_id);
 
 -- ------------------------------------------------------------
--- 11. briefings
+-- 12. briefings
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS briefings (
     id SERIAL PRIMARY KEY,
@@ -250,7 +279,7 @@ CREATE TABLE IF NOT EXISTS briefings (
 CREATE INDEX IF NOT EXISTS ix_briefings_organization_id ON briefings(organization_id);
 
 -- ------------------------------------------------------------
--- 12. optional helper function for updated_at
+-- 13. optional helper function for updated_at
 -- ------------------------------------------------------------
 CREATE OR REPLACE FUNCTION set_updated_at()
 RETURNS TRIGGER AS $$
@@ -261,7 +290,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ------------------------------------------------------------
--- 13. attach updated_at trigger to all tables
+-- 14. attach updated_at trigger to all tables
 -- ------------------------------------------------------------
 DO $$
 DECLARE
@@ -275,6 +304,7 @@ BEGIN
         'workspace_settings',
         'team_invites',
         'projects',
+        'project_history',
         'watchlists',
         'watchlist_items',
         'saved_reports',

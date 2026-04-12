@@ -5,6 +5,7 @@ import {
   FiActivity,
   FiTrendingUp,
   FiZap,
+  FiRefreshCw,
 } from "react-icons/fi";
 
 import api, { projectsAPI, systemAPI } from "../services/api";
@@ -47,15 +48,17 @@ const Dashboard = () => {
       const [projectsData, metricsData, workspaceSummary] = await Promise.all([
         projectsAPI.getAll(),
         systemAPI.getMetrics(),
-        api.agent.summary().catch(() => null),
+        api?.agent?.summary ? api.agent.summary().catch(() => null) : Promise.resolve(null),
       ]);
 
-      setProjects(Array.isArray(projectsData) ? projectsData : []);
+      const safeProjects = Array.isArray(projectsData) ? projectsData : [];
+
+      setProjects(safeProjects);
       setMetrics(metricsData || null);
       setAgentSummary(workspaceSummary || null);
 
       trackEvent("dashboard_loaded", {
-        projects_count: Array.isArray(projectsData) ? projectsData.length : 0,
+        projects_count: safeProjects.length,
       });
     } catch (err) {
       console.error("[Dashboard] Load failed:", err);
@@ -101,7 +104,8 @@ const Dashboard = () => {
         twitter_follower_growth_30d:
           payload.twitter_follower_growth_30d ??
           (index >= 0 ? next[index]?.twitter_follower_growth_30d : 0),
-        github_stars: payload.github_stars ?? (index >= 0 ? next[index]?.github_stars : 0),
+        github_stars:
+          payload.github_stars ?? (index >= 0 ? next[index]?.github_stars : 0),
         github_star_growth_30d:
           payload.github_star_growth_30d ??
           (index >= 0 ? next[index]?.github_star_growth_30d : 0),
@@ -131,7 +135,9 @@ const Dashboard = () => {
   const handleRefresh = async () => {
     try {
       setRefreshing(true);
+      setError("");
       await projectsAPI.refresh();
+      await loadDashboard();
       trackEvent("dashboard_refresh_triggered");
     } catch (err) {
       console.error("[Dashboard] Refresh failed:", err);
@@ -164,19 +170,17 @@ const Dashboard = () => {
     return `${Math.round(total / projects.length)}%`;
   }, [projects]);
 
-  const formatMoney = (value) => {
-    return `$${Math.round(Number(value || 0)).toLocaleString()}`;
-  };
+  const formatMoney = (value) => `$${Math.round(Number(value || 0)).toLocaleString()}`;
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 xl:flex">
+      <div className="app-page xl:flex">
         <Sidebar />
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 app-content">
           <DashboardShell>
             <div className="flex min-h-[60vh] items-center justify-center">
               <div className="text-center">
-                <div className="loading-spinner mx-auto" />
+                <div className="spinner mx-auto" />
                 <p className="mt-4 font-medium text-slate-600">Loading dashboard...</p>
               </div>
             </div>
@@ -186,11 +190,11 @@ const Dashboard = () => {
     );
   }
 
-  if (error) {
+  if (error && !projects.length) {
     return (
-      <div className="min-h-screen bg-slate-50 xl:flex">
+      <div className="app-page xl:flex">
         <Sidebar />
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 app-content">
           <DashboardShell>
             <ErrorState error={error} onRetry={handleRetry} />
           </DashboardShell>
@@ -200,10 +204,10 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 xl:flex">
+    <div className="app-page xl:flex">
       <Sidebar />
 
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 app-content">
         <DashboardShell>
           <div id="overview">
             <Topbar
@@ -214,6 +218,24 @@ const Dashboard = () => {
               subtitle="Real-time project intelligence for your workspace."
             />
           </div>
+
+          <div className="page-actions">
+            <button
+              type="button"
+              className="action-btn refresh"
+              onClick={handleRefresh}
+              disabled={refreshing}
+            >
+              <FiRefreshCw className={refreshing ? "animate-spin" : ""} />
+              {refreshing ? "Refreshing..." : "Refresh Data"}
+            </button>
+          </div>
+
+          {error ? (
+            <div className="mb-6 app-panel p-4">
+              <p className="error-text">{error}</p>
+            </div>
+          ) : null}
 
           <div className="mb-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
             <KpiCard
@@ -250,32 +272,35 @@ const Dashboard = () => {
           </div>
 
           {agentSummary ? (
-            <div className="mb-8 glass-card p-6">
+            <div className="mb-8 app-panel p-6">
               <div className="mb-4 flex items-center gap-2 text-cyan-700">
                 <FiZap className="h-5 w-5" />
                 <h2 className="text-xl font-bold text-slate-900">Agent Workspace Summary</h2>
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="app-panel-soft p-4">
                   <div className="text-sm text-slate-500">Projects</div>
                   <div className="mt-1 text-2xl font-black text-slate-900">
                     {agentSummary.projects ?? 0}
                   </div>
                 </div>
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+
+                <div className="app-panel-soft p-4">
                   <div className="text-sm text-slate-500">Watchlists</div>
                   <div className="mt-1 text-2xl font-black text-slate-900">
                     {agentSummary.watchlists ?? 0}
                   </div>
                 </div>
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+
+                <div className="app-panel-soft p-4">
                   <div className="text-sm text-slate-500">Reports</div>
                   <div className="mt-1 text-2xl font-black text-slate-900">
                     {agentSummary.reports ?? 0}
                   </div>
                 </div>
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+
+                <div className="app-panel-soft p-4">
                   <div className="text-sm text-slate-500">Briefings</div>
                   <div className="mt-1 text-2xl font-black text-slate-900">
                     {agentSummary.briefings ?? 0}
@@ -285,44 +310,49 @@ const Dashboard = () => {
             </div>
           ) : null}
 
-          <div className="mb-8">
+          <div className="mb-8 app-panel p-4 sm:p-6">
             <AdvancedIntelCharts projects={projects} />
           </div>
 
-          <div className="mb-8">
+          <div className="mb-8 app-panel p-4 sm:p-6">
             <LiveChart data={projects} />
           </div>
 
           <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <AlertsPanel alerts={liveAlerts} />
-            <AIInsightsPanel insights={liveInsights} />
+            <div className="app-panel p-4 sm:p-6">
+              <AlertsPanel alerts={liveAlerts} />
+            </div>
+
+            <div className="app-panel p-4 sm:p-6">
+              <AIInsightsPanel insights={liveInsights} />
+            </div>
           </div>
 
           <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <div className="glass-card p-6">
+            <div className="app-panel p-6">
               <h2 className="mb-4 text-xl font-bold text-slate-900">Platform Summary</h2>
 
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="app-panel-soft p-4">
                   <div className="text-sm text-slate-500">Average Score</div>
                   <div className="mt-1 text-3xl font-extrabold text-slate-900">{avgScore}</div>
                 </div>
 
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="app-panel-soft p-4">
                   <div className="text-sm text-slate-500">AI Insights</div>
                   <div className="mt-1 text-3xl font-extrabold text-slate-900">
                     {liveInsights.length}
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="app-panel-soft p-4">
                   <div className="text-sm text-slate-500">Live Alerts</div>
                   <div className="mt-1 text-3xl font-extrabold text-slate-900">
                     {liveAlerts.length}
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="app-panel-soft p-4">
                   <div className="text-sm text-slate-500">WebSocket Connections</div>
                   <div className="mt-1 text-3xl font-extrabold text-slate-900">
                     {metrics?.websocket_connections ?? 0}
@@ -331,10 +361,12 @@ const Dashboard = () => {
               </div>
             </div>
 
-            <MetricsPanel metrics={metrics || {}} />
+            <div className="app-panel p-4 sm:p-6">
+              <MetricsPanel metrics={metrics || {}} />
+            </div>
           </div>
 
-          <div className="mb-8" id="projects">
+          <div className="mb-8 app-panel p-4 sm:p-6" id="projects">
             <ProjectTable projects={projects} />
           </div>
         </DashboardShell>

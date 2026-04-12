@@ -8,6 +8,10 @@ import {
   FiTrendingUp,
   FiActivity,
   FiCpu,
+  FiFolder,
+  FiGrid,
+  FiLogIn,
+  FiUsers,
 } from "react-icons/fi";
 
 const FeatureCard = ({ icon: Icon, title, text }) => (
@@ -20,12 +24,33 @@ const FeatureCard = ({ icon: Icon, title, text }) => (
   </div>
 );
 
+const QuickLinkCard = ({ to, icon: Icon, title, text, primary = false }) => (
+  <Link
+    to={to}
+    className={`group rounded-2xl border p-5 transition-all duration-300 hover:-translate-y-1 ${
+      primary
+        ? "border-brand-500/30 bg-brand-500/10 shadow-lg shadow-brand-500/10"
+        : "border-slate-800 bg-dark-panel/40 hover:border-brand-500/20"
+    }`}
+  >
+    <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-dark-panel/70">
+      <Icon className="h-5 w-5 text-brand-400" />
+    </div>
+    <div className="flex items-center justify-between gap-3">
+      <div>
+        <h3 className="text-lg font-bold text-dark-text">{title}</h3>
+        <p className="mt-1 text-sm text-slate-400">{text}</p>
+      </div>
+      <FiArrowRight className="h-5 w-5 text-brand-400 transition-transform duration-300 group-hover:translate-x-1" />
+    </div>
+  </Link>
+);
+
 const Landing = () => {
   return (
     <div className="min-h-screen bg-dark-bg text-dark-text">
       {/* Hero Section */}
       <section className="relative overflow-hidden">
-        {/* Animated background gradients */}
         <div className="absolute inset-0 bg-hero-pattern" />
         <div className="absolute -top-40 -right-40 h-80 w-80 rounded-full bg-brand-500/20 blur-3xl" />
         <div className="absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-teal-500/20 blur-3xl" />
@@ -50,19 +75,28 @@ const Landing = () => {
                 teams, analysts, and global organizations.
               </p>
 
-              <div className="mt-8 flex flex-col gap-4 sm:flex-row">
-                <Link
-                  to="/register"
-                  className="btn-primary group"
-                >
+              <div className="mt-4 max-w-2xl rounded-2xl border border-slate-800 bg-dark-panel/30 p-4 text-sm leading-7 text-slate-300">
+                Recruiters, reviewers, and visitors can explore the platform
+                without creating an account. When you want to actually use the
+                system with organization roles, workspace access, and protected
+                actions, enter through the workspace flow.
+              </div>
+
+              <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:flex-wrap">
+                <Link to="/organizations" className="btn-primary group">
                   Launch Workspace
                   <FiArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
                 </Link>
 
-                <Link
-                  to="/login"
-                  className="btn-secondary"
-                >
+                <Link to="/dashboard" className="btn-secondary">
+                  Explore Platform
+                </Link>
+
+                <Link to="/projects" className="btn-secondary">
+                  View Projects
+                </Link>
+
+                <Link to="/login" className="btn-secondary">
                   Sign In
                 </Link>
               </div>
@@ -142,6 +176,48 @@ const Landing = () => {
         </div>
       </section>
 
+      {/* Explore Section */}
+      <section className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <div className="mb-8 text-center">
+          <h2 className="text-3xl font-black tracking-tight text-dark-text">
+            Explore the platform before signing in
+          </h2>
+          <p className="mx-auto mt-3 max-w-3xl text-slate-400">
+            Anyone reviewing the product can open the main pages and inspect the
+            interface. Login is only needed for protected organization features,
+            member controls, billing, API keys, watchlists, and workspace use.
+          </p>
+        </div>
+
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+          <QuickLinkCard
+            to="/dashboard"
+            icon={FiGrid}
+            title="Explore Dashboard"
+            text="Open the public dashboard preview and inspect the product flow."
+            primary
+          />
+          <QuickLinkCard
+            to="/projects"
+            icon={FiFolder}
+            title="Browse Projects"
+            text="Review project listings, details, and research presentation."
+          />
+          <QuickLinkCard
+            to="/organizations"
+            icon={FiUsers}
+            title="Workspace Access"
+            text="Create or join an organization for real usage and role-based access."
+          />
+          <QuickLinkCard
+            to="/login"
+            icon={FiLogIn}
+            title="Sign In"
+            text="Return as an owner, admin, analyst, or viewer."
+          />
+        </div>
+      </section>
+
       {/* Features Section */}
       <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
         <div className="mb-10 text-center">
@@ -178,7 +254,7 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* Tech stack footer (optional) */}
+      {/* Footer */}
       <footer className="border-t border-slate-800 py-8 text-center text-sm text-slate-500">
         <div className="flex flex-wrap items-center justify-center gap-6">
           <span className="flex items-center gap-2">

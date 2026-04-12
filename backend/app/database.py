@@ -29,7 +29,7 @@ def _normalize_database_url(url: str) -> str:
 
 
 def _create_engine_instance():
-    """Create a SQLAlchemy engine with sensible connection timeouts."""
+    """Create a SQLAlchemy engine with safe production defaults."""
     if not settings.DATABASE_URL:
         logger.warning("DATABASE_URL is not set")
         return None
@@ -40,10 +40,8 @@ def _create_engine_instance():
     if database_url.startswith("sqlite"):
         connect_args["check_same_thread"] = False
     elif database_url.startswith("postgresql"):
-        # Keep failed DB connections from hanging startup too long
         connect_args["connect_timeout"] = 5
-        # Railway/managed Postgres often needs SSL depending on setup.
-        # Uncomment the next line if your provider requires SSL:
+        # Uncomment only if your Railway/Postgres setup requires SSL:
         # connect_args["sslmode"] = "require"
 
     engine_instance = create_engine(
@@ -72,7 +70,6 @@ def get_engine():
             if engine is None:
                 return None
 
-            # Quick health probe
             with engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
 
@@ -111,7 +108,14 @@ def get_session_factory():
 
 
 def _ensure_missing_columns():
-    """Add missing columns to existing tables for schema evolution."""
+    """
+    Add missing columns to existing tables for schema evolution.
+
+    Note:
+    This does not rewrite existing foreign-key constraints.
+    If you changed ON DELETE behavior in models.py, you still need
+    a real migration for already-existing tables.
+    """
     db_engine = get_engine()
     if db_engine is None:
         logger.warning("Skipping schema patching because engine is unavailable")
@@ -193,7 +197,12 @@ def _ensure_missing_columns():
 
 
 def init_db():
-    """Initialize database tables and ensure schema is up to date."""
+    """
+    Initialize database tables and ensure schema is up to date.
+
+    This creates missing tables from SQLAlchemy metadata.
+    It does not alter existing FK constraints for old tables.
+    """
     db_engine = get_engine()
     if db_engine is None:
         logger.warning("Database initialization skipped because engine is unavailable")
@@ -212,7 +221,7 @@ def init_db():
 
 
 def get_db():
-    """Dependency to get database session."""
+    """Dependency to get a database session."""
     session_factory = get_session_factory()
     if session_factory is None:
         logger.warning("Database session factory not available")

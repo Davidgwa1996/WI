@@ -45,15 +45,61 @@ class Organization(Base, TimestampMixin):
     stripe_subscription_id = Column(String(255), nullable=True)
 
     # Relationships
-    users = relationship("User", back_populates="organization", cascade="all, delete-orphan")
-    api_keys = relationship("APIKey", back_populates="organization", cascade="all, delete-orphan")
-    audit_logs = relationship("AuditLog", back_populates="organization", cascade="all, delete-orphan")
-    projects = relationship("Project", back_populates="organization", cascade="all, delete-orphan")
-    watchlists = relationship("Watchlist", back_populates="organization", cascade="all, delete-orphan")
-    invites = relationship("TeamInvite", back_populates="organization")
-    briefings = relationship("Briefing", back_populates="organization")
-    saved_reports = relationship("SavedReport", back_populates="organization")
-    workspace_settings = relationship("WorkspaceSetting", back_populates="organization", uselist=False)
+    users = relationship(
+        "User",
+        back_populates="organization",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    api_keys = relationship(
+        "APIKey",
+        back_populates="organization",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    audit_logs = relationship(
+        "AuditLog",
+        back_populates="organization",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    projects = relationship(
+        "Project",
+        back_populates="organization",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    watchlists = relationship(
+        "Watchlist",
+        back_populates="organization",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    invites = relationship(
+        "TeamInvite",
+        back_populates="organization",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    briefings = relationship(
+        "Briefing",
+        back_populates="organization",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    saved_reports = relationship(
+        "SavedReport",
+        back_populates="organization",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    workspace_settings = relationship(
+        "WorkspaceSetting",
+        back_populates="organization",
+        uselist=False,
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
     def __repr__(self):
         return f"<Organization(id={self.id}, name='{self.name}', slug='{self.slug}')>"
@@ -63,13 +109,17 @@ class User(Base, TimestampMixin):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    organization_id = Column(
+        Integer,
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
 
     full_name = Column(String(255), nullable=False)
     email = Column(String(255), nullable=False, unique=True, index=True)
     password_hash = Column(String(255), nullable=False)
 
-    # Updated role comment to include analyst
     role = Column(String(50), default="viewer", nullable=False)  # owner, admin, analyst, member, viewer
     is_active = Column(Boolean, default=True, nullable=False)
     is_verified = Column(Boolean, default=False, nullable=False)
@@ -77,10 +127,31 @@ class User(Base, TimestampMixin):
 
     # Relationships
     organization = relationship("Organization", back_populates="users")
-    audit_logs = relationship("AuditLog", back_populates="actor", foreign_keys="AuditLog.actor_user_id")
-    sent_invites = relationship("TeamInvite", foreign_keys="TeamInvite.invited_by_user_id", back_populates="invited_by")
-    created_watchlists = relationship("Watchlist", foreign_keys="Watchlist.created_by", back_populates="creator")
-    watchlist_items_added = relationship("WatchlistItem", foreign_keys="WatchlistItem.added_by", back_populates="adder")
+
+    audit_logs = relationship(
+        "AuditLog",
+        back_populates="actor",
+        foreign_keys="AuditLog.actor_user_id",
+        passive_deletes=True,
+    )
+    sent_invites = relationship(
+        "TeamInvite",
+        foreign_keys="TeamInvite.invited_by_user_id",
+        back_populates="invited_by",
+        passive_deletes=True,
+    )
+    created_watchlists = relationship(
+        "Watchlist",
+        foreign_keys="Watchlist.created_by",
+        back_populates="creator",
+        passive_deletes=True,
+    )
+    watchlist_items_added = relationship(
+        "WatchlistItem",
+        foreign_keys="WatchlistItem.added_by",
+        back_populates="adder",
+        passive_deletes=True,
+    )
 
     def __repr__(self):
         return f"<User(id={self.id}, email='{self.email}', role='{self.role}')>"
@@ -93,7 +164,12 @@ class APIKey(Base, TimestampMixin):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    organization_id = Column(
+        Integer,
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
 
     name = Column(String(255), nullable=False)
     key_prefix = Column(String(20), nullable=False, index=True)
@@ -115,8 +191,18 @@ class AuditLog(Base, TimestampMixin):
     __tablename__ = "audit_logs"
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
-    actor_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    organization_id = Column(
+        Integer,
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    actor_user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     action = Column(String(100), nullable=False, index=True)
     target_type = Column(String(100), nullable=False)
@@ -138,7 +224,13 @@ class WorkspaceSetting(Base, TimestampMixin):
     __tablename__ = "workspace_settings"
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, unique=True, index=True)
+    organization_id = Column(
+        Integer,
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
 
     default_alerts_enabled = Column(Boolean, default=True, nullable=False)
     weekly_report_enabled = Column(Boolean, default=False, nullable=False)
@@ -156,18 +248,25 @@ class TeamInvite(Base, TimestampMixin):
     __tablename__ = "team_invites"
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    organization_id = Column(
+        Integer,
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
 
     email = Column(String(255), nullable=False, index=True)
-    # Updated comment to include analyst
     role = Column(String(50), default="viewer", nullable=False)  # owner, admin, analyst, member, viewer
     token = Column(String(255), nullable=False, unique=True, index=True)
-    invited_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    invited_by_user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     is_accepted = Column(Boolean, default=False, nullable=False)
     expires_at = Column(DateTime, nullable=False)
     accepted_at = Column(DateTime, nullable=True)
 
-    # Relationships
     organization = relationship("Organization", back_populates="invites")
     invited_by = relationship("User", foreign_keys=[invited_by_user_id], back_populates="sent_invites")
 
@@ -179,7 +278,12 @@ class Project(Base, TimestampMixin):
     __tablename__ = "projects"
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    organization_id = Column(
+        Integer,
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
 
     name = Column(String(255), index=True, nullable=False)
     description = Column(Text, nullable=True)
@@ -193,7 +297,6 @@ class Project(Base, TimestampMixin):
     funding_raised = Column(Float, default=0.0)
     team_size = Column(Integer, default=0)
 
-    # Social metrics
     twitter_followers = Column(Integer, default=0)
     twitter_follower_growth_30d = Column(Float, default=0.0)
     discord_members = Column(Integer, default=0)
@@ -204,7 +307,6 @@ class Project(Base, TimestampMixin):
     total_volume = Column(Float, default=0.0)
     tvl = Column(Float, default=0.0)
 
-    # AI scores
     llm_score = Column(Float, default=50.0)
     sentiment_score = Column(Float, default=50.0)
     funding_prediction = Column(Float, default=50.0)
@@ -212,33 +314,27 @@ class Project(Base, TimestampMixin):
     overall_score = Column(Float, default=50.0)
     anomaly_score = Column(Float, default=0.0)
 
-    # Timestamps
     last_scraped_at = Column(DateTime, nullable=True)
     last_ai_scored_at = Column(DateTime, nullable=True)
 
-    # Additional flags
     is_active = Column(Boolean, default=True, nullable=False)
     is_featured = Column(Boolean, default=False, nullable=False)
 
-    # Extra data
     extra_data = Column(JSON, default=dict)
 
-    # Relationships
     organization = relationship("Organization", back_populates="projects")
-    history = relationship("ProjectHistory", back_populates="project", cascade="all, delete-orphan")
-    watchlist_items = relationship("WatchlistItem", back_populates="project", cascade="all, delete-orphan")
+    history = relationship("ProjectHistory", back_populates="project", cascade="all, delete-orphan", passive_deletes=True)
+    watchlist_items = relationship("WatchlistItem", back_populates="project", cascade="all, delete-orphan", passive_deletes=True)
 
-    # Indexes
     __table_args__ = (
-        Index('idx_project_sector_stage', 'sector', 'stage'),
-        Index('idx_project_overall_score', 'overall_score'),
-        Index('idx_project_created_at', 'created_at'),
-        Index('idx_project_organization', 'organization_id'),
-        Index('idx_project_updated_at', 'updated_at'),
+        Index("idx_project_sector_stage", "sector", "stage"),
+        Index("idx_project_overall_score", "overall_score"),
+        Index("idx_project_created_at", "created_at"),
+        Index("idx_project_organization", "organization_id"),
+        Index("idx_project_updated_at", "updated_at"),
     )
 
     def to_dict(self):
-        """Convert model to dictionary for JSON responses"""
         return {
             "id": self.id,
             "name": self.name,
@@ -271,50 +367,44 @@ class Project(Base, TimestampMixin):
             "anomaly_score": self.anomaly_score,
             "is_active": self.is_active,
             "is_featured": self.is_featured,
-            "extra_data": self.extra_data or {}
+            "extra_data": self.extra_data or {},
         }
 
     def __repr__(self):
         return f"<Project(id={self.id}, name='{self.name}', stage='{self.stage}', overall_score={self.overall_score})>"
 
 
-# ============================================
-# PROJECT HISTORY MODEL (for change detection)
-# ============================================
 class ProjectHistory(Base, TimestampMixin):
-    """Tracks historical changes for projects (used in watchlists and change detection)"""
     __tablename__ = "project_history"
 
     id = Column(Integer, primary_key=True, index=True)
-    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False, index=True)
+    project_id = Column(
+        Integer,
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
 
-    # Scores at the time of recording
     overall_score = Column(Float, default=0.0)
     momentum_score = Column(Float, default=0.0)
     sentiment_score = Column(Float, default=0.0)
     funding_prediction = Column(Float, default=0.0)
 
-    # Metrics at the time of recording
     twitter_followers = Column(Integer, default=0)
     github_stars = Column(Integer, default=0)
     discord_members = Column(Integer, default=0)
     market_cap = Column(Float, default=0.0)
     tvl = Column(Float, default=0.0)
 
-    # Timestamp (override TimestampMixin for recorded_at)
     recorded_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    
-    # Optional: record what triggered the update
-    trigger_source = Column(String(50), default="scraper")  # scraper, ai, manual, watchlist
+    trigger_source = Column(String(50), default="scraper")
 
-    # Relationships
     project = relationship("Project", back_populates="history")
 
-    # Indexes
     __table_args__ = (
-        Index('idx_project_history_project', 'project_id'),
-        Index('idx_project_history_recorded', 'recorded_at'),
-        Index('idx_project_history_project_recorded', 'project_id', 'recorded_at'),
+        Index("idx_project_history_project", "project_id"),
+        Index("idx_project_history_recorded", "recorded_at"),
+        Index("idx_project_history_project_recorded", "project_id", "recorded_at"),
     )
 
     def __repr__(self):
@@ -325,24 +415,34 @@ class Watchlist(Base, TimestampMixin):
     __tablename__ = "watchlists"
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
-    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    organization_id = Column(
+        Integer,
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    created_by = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     is_default = Column(Boolean, default=False, nullable=False)
 
-    # Settings as JSON
-    settings = Column(JSON, default={
-        "alert_on_change": True,
-        "alert_threshold": 5.0,
-        "notification_channels": ["in_app"]
-    })
+    settings = Column(
+        JSON,
+        default={
+            "alert_on_change": True,
+            "alert_threshold": 5.0,
+            "notification_channels": ["in_app"],
+        },
+    )
 
-    # Relationships
     organization = relationship("Organization", back_populates="watchlists")
     creator = relationship("User", foreign_keys=[created_by], back_populates="created_watchlists")
-    items = relationship("WatchlistItem", back_populates="watchlist", cascade="all, delete-orphan")
+    items = relationship("WatchlistItem", back_populates="watchlist", cascade="all, delete-orphan", passive_deletes=True)
 
     def __repr__(self):
         return f"<Watchlist(id={self.id}, name='{self.name}', organization_id={self.organization_id})>"
@@ -352,22 +452,34 @@ class WatchlistItem(Base, TimestampMixin):
     __tablename__ = "watchlist_items"
 
     id = Column(Integer, primary_key=True, index=True)
-    watchlist_id = Column(Integer, ForeignKey("watchlists.id"), nullable=False, index=True)
-    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False, index=True)
+    watchlist_id = Column(
+        Integer,
+        ForeignKey("watchlists.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    project_id = Column(
+        Integer,
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     note = Column(Text, nullable=True)
     tag = Column(String(100), nullable=True)
-    added_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    added_by = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
-    # Relationships
     watchlist = relationship("Watchlist", back_populates="items")
     project = relationship("Project", back_populates="watchlist_items")
     adder = relationship("User", foreign_keys=[added_by], back_populates="watchlist_items_added")
 
-    # Unique constraint to prevent duplicate items
     __table_args__ = (
-        UniqueConstraint('watchlist_id', 'project_id', name='uq_watchlist_item'),
-        Index('idx_watchlist_item_watchlist', 'watchlist_id'),
-        Index('idx_watchlist_item_project', 'project_id'),
+        UniqueConstraint("watchlist_id", "project_id", name="uq_watchlist_item"),
+        Index("idx_watchlist_item_watchlist", "watchlist_id"),
+        Index("idx_watchlist_item_project", "project_id"),
     )
 
     def __repr__(self):
@@ -378,7 +490,12 @@ class SavedReport(Base, TimestampMixin):
     __tablename__ = "saved_reports"
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    organization_id = Column(
+        Integer,
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
 
     title = Column(String(255), nullable=False)
     summary = Column(Text, nullable=True)
@@ -397,7 +514,12 @@ class Briefing(Base, TimestampMixin):
     __tablename__ = "briefings"
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    organization_id = Column(
+        Integer,
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
 
     title = Column(String(255), nullable=False)
     summary = Column(Text, nullable=False)
@@ -411,14 +533,9 @@ class Briefing(Base, TimestampMixin):
         return f"<Briefing(id={self.id}, title='{self.title}', kind='{self.kind}')>"
 
 
-# ============================================
-# HELPER FUNCTIONS
-# ============================================
 def create_tables(engine):
-    """Create all tables defined in the models"""
     Base.metadata.create_all(bind=engine)
 
 
 def drop_tables(engine):
-    """Drop all tables (use with caution!)"""
     Base.metadata.drop_all(bind=engine)

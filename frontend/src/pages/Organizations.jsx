@@ -22,39 +22,49 @@ const Organizations = () => {
     try {
       setLoading(true);
       setError("");
+      setSuccess("");
       setDebugInfo(null);
-      console.log("[Organizations] Loading organizations...");
-      const data = await orgAPI.listAll(); // Uses /organizations/all
-      console.log("[Organizations] Loaded:", data);
+
+      const data = await orgAPI.listAll();
       setOrganizations(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("[Organizations] Failed to load:", err);
-      setError(err.message || "Failed to load organizations. Make sure you are logged in as an owner or super admin.");
-      setDebugInfo({ loadError: err.message, status: err.status });
+      setOrganizations([]);
+      setError(
+        err.message ||
+          "Failed to load organizations. Sign in with the right privileges to manage workspaces."
+      );
+      setDebugInfo({
+        loadError: err.message,
+        status: err.status,
+      });
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    document.title = "Web3 Intel Platform | Organizations";
     loadOrgs();
   }, [loadOrgs]);
 
   const toggleSelect = (orgId) => {
-    const newSelected = new Set(selectedOrgs);
-    if (newSelected.has(orgId)) {
-      newSelected.delete(orgId);
-    } else {
-      newSelected.add(orgId);
-    }
-    setSelectedOrgs(newSelected);
+    setSelectedOrgs((prev) => {
+      const next = new Set(prev);
+      if (next.has(orgId)) {
+        next.delete(orgId);
+      } else {
+        next.add(orgId);
+      }
+      return next;
+    });
   };
 
   const selectAll = () => {
     if (selectedOrgs.size === organizations.length) {
       setSelectedOrgs(new Set());
     } else {
-      setSelectedOrgs(new Set(organizations.map(o => o.id)));
+      setSelectedOrgs(new Set(organizations.map((org) => org.id)));
     }
   };
 
@@ -63,33 +73,49 @@ const Organizations = () => {
       setError("You must be logged in to delete organizations.");
       return;
     }
+
     if (selectedOrgs.size === 0) {
-      setError("No organizations selected");
+      setError("No organizations selected.");
       return;
     }
-    if (!window.confirm(`Delete ${selectedOrgs.size} organization(s)? This action cannot be undone.`)) {
-      return;
-    }
+
+    const count = selectedOrgs.size;
+    const confirmed = window.confirm(
+      `Delete ${count} organization(s)? This action cannot be undone.`
+    );
+    if (!confirmed) return;
+
     const payload = { org_ids: Array.from(selectedOrgs) };
-    console.log("[Organizations] Bulk delete payload:", payload);
+
     try {
       setDeleting(true);
       setError("");
+      setSuccess("");
       setDebugInfo(null);
+
       await orgAPI.bulkDelete(payload);
-      setSuccess(`${selectedOrgs.size} organization(s) deleted successfully`);
+
+      setSuccess(`${count} organization(s) deleted successfully.`);
       setSelectedOrgs(new Set());
       await loadOrgs();
     } catch (err) {
       console.error("[Organizations] Bulk delete error:", err);
-      let errorMessage = err.message || "Failed to delete organizations";
+
+      let errorMessage = err.message || "Failed to delete organizations.";
       if (err.status === 422) {
-        errorMessage = "Invalid request format. Please ensure the payload matches { org_ids: [...] }.";
+        errorMessage =
+          "Invalid request format. The backend expects { org_ids: [...] }.";
       } else if (err.status === 403) {
-        errorMessage = "You don't have permission to delete these organizations. Only owners or super admins can delete.";
+        errorMessage =
+          "You do not have permission to delete these organizations.";
       }
+
       setError(errorMessage);
-      setDebugInfo({ bulkDeleteError: err.message, status: err.status, payload });
+      setDebugInfo({
+        bulkDeleteError: err.message,
+        status: err.status,
+        payload,
+      });
     } finally {
       setDeleting(false);
     }
@@ -100,129 +126,198 @@ const Organizations = () => {
       setError("You must be logged in to delete an organization.");
       return;
     }
-    if (!window.confirm(`Delete organization "${orgName}"? This will delete all associated data.`)) {
-      return;
-    }
-    console.log("[Organizations] Deleting single org:", orgId);
+
+    const confirmed = window.confirm(
+      `Delete organization "${orgName}"? This will remove all associated data.`
+    );
+    if (!confirmed) return;
+
     try {
+      setError("");
+      setSuccess("");
+      setDebugInfo(null);
+
       await orgAPI.delete(orgId);
-      setSuccess(`Organization "${orgName}" deleted successfully`);
+
+      setSuccess(`Organization "${orgName}" deleted successfully.`);
+      setSelectedOrgs((prev) => {
+        const next = new Set(prev);
+        next.delete(orgId);
+        return next;
+      });
+
       await loadOrgs();
     } catch (err) {
       console.error("[Organizations] Delete single error:", err);
-      let errorMessage = err.message || "Failed to delete organization";
+
+      let errorMessage = err.message || "Failed to delete organization.";
       if (err.status === 403) {
-        errorMessage = "You don't have permission to delete this organization. Only owners or super admins can delete.";
+        errorMessage =
+          "You do not have permission to delete this organization.";
       } else if (err.status === 404) {
         errorMessage = "Organization not found.";
       }
+
       setError(errorMessage);
-      setDebugInfo({ singleDeleteError: err.message, status: err.status, orgId });
+      setDebugInfo({
+        singleDeleteError: err.message,
+        status: err.status,
+        orgId,
+      });
     }
   };
 
+  const allSelected =
+    organizations.length > 0 && selectedOrgs.size === organizations.length;
+
   return (
-    <div className="min-h-screen bg-dark-bg text-dark-text xl:flex">
+    <div className="app-page xl:flex">
       <Sidebar />
-      <div className="flex-1">
+
+      <div className="min-w-0 flex-1 app-content">
         <DashboardShell>
-          <Topbar 
-            title="Organizations" 
-            subtitle="Manage all workspaces (super admin view)" 
+          <Topbar
+            title="Organizations"
+            subtitle="Browse workspaces and manage them if your role allows it."
           />
-          <SectionCard 
-            title="All Workspaces" 
-            subtitle="View, select, and delete any organization (super admin privilege)"
+
+          <SectionCard
+            title="All Workspaces"
+            subtitle="Recruiters and reviewers can inspect the platform flow here. Deletion actions require the right account permissions."
           >
-            {error && (
-              <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">
+            {error ? (
+              <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
                 {error}
-                {debugInfo && process.env.NODE_ENV === "development" && (
-                  <details className="mt-2 text-xs text-red-300">
-                    <summary>Debug info</summary>
-                    <pre className="mt-1 overflow-auto rounded bg-red-900/20 p-2">
+                {debugInfo && import.meta.env.DEV ? (
+                  <details className="mt-3 text-xs text-red-700">
+                    <summary className="cursor-pointer font-semibold">
+                      Debug info
+                    </summary>
+                    <pre className="mt-2 overflow-auto rounded-lg bg-white p-3 text-red-700">
                       {JSON.stringify(debugInfo, null, 2)}
                     </pre>
                   </details>
-                )}
+                ) : null}
               </div>
-            )}
-            {success && (
-              <div className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-400">
+            ) : null}
+
+            {success ? (
+              <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
                 {success}
               </div>
-            )}
+            ) : null}
 
-            <div className="mb-4 flex items-center justify-between">
-              <div className="flex gap-2">
-                <button
-                  onClick={selectAll}
-                  className="rounded-lg bg-cyan-500/20 px-3 py-1 text-sm font-medium text-cyan-400 hover:bg-cyan-500/30"
-                >
-                  {selectedOrgs.size === organizations.length ? "Deselect All" : "Select All"}
-                </button>
-                <button
-                  onClick={loadOrgs}
-                  disabled={loading}
-                  className="rounded-lg bg-dark-panel px-3 py-1 text-sm font-medium text-slate-300 hover:bg-slate-800 disabled:opacity-50"
-                >
-                  {loading ? "Refreshing..." : "Refresh"}
-                </button>
-              </div>
+            <div className="page-actions">
               <button
+                type="button"
+                onClick={selectAll}
+                className="action-btn secondary"
+                disabled={organizations.length === 0}
+              >
+                {allSelected ? "Deselect All" : "Select All"}
+              </button>
+
+              <button
+                type="button"
+                onClick={loadOrgs}
+                disabled={loading}
+                className="action-btn refresh"
+              >
+                {loading ? "Refreshing..." : "Refresh"}
+              </button>
+
+              <button
+                type="button"
                 onClick={deleteSelected}
                 disabled={deleting || selectedOrgs.size === 0 || !isLoggedIn}
-                className="rounded-lg bg-red-600 px-3 py-1 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-50"
+                className="action-btn danger"
               >
-                {deleting ? "Deleting..." : `Delete Selected (${selectedOrgs.size})`}
+                {deleting
+                  ? "Deleting..."
+                  : `Delete Selected (${selectedOrgs.size})`}
               </button>
             </div>
 
+            {!isLoggedIn ? (
+              <div className="mb-4 rounded-xl border border-cyan-200 bg-cyan-50 p-4 text-sm text-cyan-800">
+                Public visitors can view this page. Sign in with an authorized
+                account to manage or delete organizations.
+              </div>
+            ) : null}
+
             {loading ? (
               <div className="flex items-center justify-center py-12">
-                <div className="h-8 w-8 animate-spin rounded-full border-4 border-cyan-500/30 border-t-cyan-500"></div>
-                <span className="ml-3 text-slate-400">Loading organizations...</span>
+                <div className="spinner-sm" />
+                <span className="ml-3 text-slate-600">
+                  Loading organizations...
+                </span>
               </div>
             ) : organizations.length === 0 ? (
-              <div className="rounded-2xl border border-slate-800 bg-dark-panel p-12 text-center text-slate-400">
-                <svg className="mx-auto h-12 w-12 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                </svg>
-                <p className="mt-2">No organizations found.</p>
-                <p className="mt-1 text-sm">You need to be logged in as a super admin to see all workspaces.</p>
+              <div className="app-panel p-12 text-center">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100">
+                  <svg
+                    className="h-7 w-7 text-slate-500"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
+                    />
+                  </svg>
+                </div>
+
+                <p className="mt-4 font-semibold text-slate-800">
+                  No organizations found.
+                </p>
+                <p className="mt-2 text-sm text-slate-500">
+                  Create or access a workspace through the organization flow.
+                </p>
               </div>
             ) : (
               <div className="space-y-3">
                 {organizations.map((org) => (
                   <div
                     key={org.id}
-                    className="flex items-center justify-between rounded-2xl border border-slate-800 bg-dark-panel p-5 transition-all hover:border-cyan-500/30 hover:shadow-glow"
+                    className="app-panel flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between"
                   >
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-start gap-4">
                       <input
                         type="checkbox"
                         checked={selectedOrgs.has(org.id)}
                         onChange={() => toggleSelect(org.id)}
                         disabled={!isLoggedIn}
-                        className="h-4 w-4 rounded border-slate-600 bg-dark-card text-cyan-500 focus:ring-cyan-500 disabled:opacity-50"
+                        className="mt-1 h-4 w-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500 disabled:opacity-50"
                       />
+
                       <div>
-                        <div className="font-bold text-dark-text">{org.name}</div>
-                        <div className="mt-1 flex flex-wrap gap-3 text-sm text-slate-400">
+                        <div className="font-bold text-slate-900">{org.name}</div>
+
+                        <div className="mt-2 flex flex-wrap gap-2 text-sm text-slate-500">
                           <span>Slug: {org.slug}</span>
                           <span>•</span>
                           <span>ID: {org.id}</span>
                           <span>•</span>
                           <span>Plan: {org.plan}</span>
                           <span>•</span>
-                          <span>Created: {new Date(org.created_at).toLocaleString()}</span>
+                          <span>
+                            Created:{" "}
+                            {org.created_at
+                              ? new Date(org.created_at).toLocaleString()
+                              : "-"}
+                          </span>
                         </div>
                       </div>
                     </div>
+
                     <button
+                      type="button"
                       onClick={() => deleteSingle(org.id, org.name)}
                       disabled={!isLoggedIn}
-                      className="rounded-lg bg-red-500/20 px-3 py-1.5 text-sm font-medium text-red-400 transition hover:bg-red-500/30 disabled:opacity-50"
+                      className="btn-danger self-start lg:self-center"
                     >
                       Delete
                     </button>

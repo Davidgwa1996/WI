@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import Response
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -12,17 +13,25 @@ from app.schemas import ApiMessage, TokenResponse, UserLogin, UserRegister
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+def _ensure_db(db: Session):
+    if db is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database not available",
+        )
+
+
 # ============================================
-# CORS PREFLIGHT HANDLER (Fixes 405 on OPTIONS)
+# CORS PREFLIGHT HANDLER
 # ============================================
 @router.options("/{path:path}")
 async def preflight_handler() -> Response:
-    """Handle CORS preflight requests for all auth endpoints."""
     return Response(status_code=200)
 
 
 # ============================================
 # REGISTER ENDPOINT
+# Creates an organization + owner account
 # ============================================
 @router.post(
     "/register",
@@ -30,14 +39,15 @@ async def preflight_handler() -> Response:
     status_code=status.HTTP_201_CREATED,
 )
 def register(payload: UserRegister, db: Session = Depends(get_db)):
-    if db is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Database not available",
-        )
+    _ensure_db(db)
 
     try:
-        existing_user = db.query(User).filter(User.email == payload.email).first()
+        email = payload.email.strip().lower()
+        organization_slug = payload.organization_slug.strip().lower()
+        organization_name = payload.organization_name.strip()
+        full_name = payload.full_name.strip()
+
+        existing_user = db.query(User).filter(User.email == email).first()
         if existing_user:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -46,7 +56,7 @@ def register(payload: UserRegister, db: Session = Depends(get_db)):
 
         existing_org = (
             db.query(Organization)
-            .filter(Organization.slug == payload.organization_slug)
+            .filter(Organization.slug == organization_slug)
             .first()
         )
         if existing_org:
@@ -57,14 +67,14 @@ def register(payload: UserRegister, db: Session = Depends(get_db)):
 
         register_organization_owner(
             db=db,
-            organization_name=payload.organization_name,
-            organization_slug=payload.organization_slug,
-            full_name=payload.full_name,
-            email=payload.email,
+            organization_name=organization_name,
+            organization_slug=organization_slug,
+            full_name=full_name,
+            email=email,
             password=payload.password,
         )
 
-        return ApiMessage(message="Registration successful")
+        return ApiMessage(message="Registration successful. You can now sign in.")
 
     except HTTPException:
         raise
@@ -82,7 +92,7 @@ def register(payload: UserRegister, db: Session = Depends(get_db)):
         print(f"Unexpected error during registration: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Registration failed unexpectedly: {str(e)}",
+            detail="Registration failed unexpectedly",
         )
 
 
@@ -91,18 +101,22 @@ def register(payload: UserRegister, db: Session = Depends(get_db)):
 # ============================================
 @router.post("/login", response_model=TokenResponse)
 def login(payload: UserLogin, db: Session = Depends(get_db)):
-    if db is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Database not available",
-        )
+    _ensure_db(db)
 
     try:
-        user = authenticate_user(db, payload.email, payload.password)
+        email = payload.email.strip().lower()
+        user = authenticate_user(db, email, payload.password)
+
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid credentials",
+            )
+
+        if hasattr(user, "is_active") and user.is_active is False:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account is inactive",
             )
 
         token = create_access_token(subject=user.email)
@@ -122,5 +136,5 @@ def login(payload: UserLogin, db: Session = Depends(get_db)):
         print(f"Unexpected error during login: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Login failed unexpectedly: {str(e)}",
+            detail="Login failed unexpectedly",
         )

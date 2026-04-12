@@ -1,9 +1,12 @@
-from app.database import engine
 from sqlalchemy import text
+from app.database import get_engine
 
 SQL = """
 BEGIN;
 
+-- ------------------------------------------------------------
+-- organizations
+-- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS organizations (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL UNIQUE,
@@ -21,6 +24,15 @@ INSERT INTO organizations (id, name, slug, plan, is_active, created_at, updated_
 VALUES (1, 'Default Organization', 'default-organization', 'starter', TRUE, NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
+SELECT setval(
+    pg_get_serial_sequence('organizations', 'id'),
+    GREATEST((SELECT COALESCE(MAX(id), 1) FROM organizations), 1),
+    true
+);
+
+-- ------------------------------------------------------------
+-- users
+-- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -35,6 +47,12 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+CREATE INDEX IF NOT EXISTS ix_users_organization_id ON users(organization_id);
+CREATE INDEX IF NOT EXISTS ix_users_email ON users(email);
+
+-- ------------------------------------------------------------
+-- api_keys
+-- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS api_keys (
     id SERIAL PRIMARY KEY,
     organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -47,6 +65,12 @@ CREATE TABLE IF NOT EXISTS api_keys (
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS uq_api_keys_key_prefix ON api_keys(key_prefix);
+CREATE INDEX IF NOT EXISTS ix_api_keys_organization_id ON api_keys(organization_id);
+
+-- ------------------------------------------------------------
+-- audit_logs
+-- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS audit_logs (
     id SERIAL PRIMARY KEY,
     organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -62,6 +86,9 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+-- ------------------------------------------------------------
+-- workspace_settings
+-- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS workspace_settings (
     id SERIAL PRIMARY KEY,
     organization_id INTEGER NOT NULL UNIQUE REFERENCES organizations(id) ON DELETE CASCADE,
@@ -74,6 +101,9 @@ CREATE TABLE IF NOT EXISTS workspace_settings (
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+-- ------------------------------------------------------------
+-- team_invites
+-- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS team_invites (
     id SERIAL PRIMARY KEY,
     organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -83,10 +113,17 @@ CREATE TABLE IF NOT EXISTS team_invites (
     invited_by_user_id INTEGER NULL REFERENCES users(id) ON DELETE SET NULL,
     is_accepted BOOLEAN NOT NULL DEFAULT FALSE,
     expires_at TIMESTAMP NOT NULL,
+    accepted_at TIMESTAMP NULL,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE team_invites
+    ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMP NULL;
+
+-- ------------------------------------------------------------
+-- projects
+-- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS projects (
     id SERIAL PRIMARY KEY,
     organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -116,6 +153,8 @@ CREATE TABLE IF NOT EXISTS projects (
     momentum_score DOUBLE PRECISION DEFAULT 0,
     overall_score DOUBLE PRECISION DEFAULT 0,
     anomaly_score DOUBLE PRECISION DEFAULT 0,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    is_featured BOOLEAN NOT NULL DEFAULT FALSE,
     last_scraped_at TIMESTAMP NULL,
     last_ai_scored_at TIMESTAMP NULL,
     extra_data JSONB DEFAULT '{}'::jsonb,
@@ -127,6 +166,8 @@ ALTER TABLE projects ADD COLUMN IF NOT EXISTS organization_id INTEGER;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS discord_guild_id VARCHAR(255);
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS token_symbol VARCHAR(100);
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS anomaly_score DOUBLE PRECISION DEFAULT 0;
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS is_featured BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS last_scraped_at TIMESTAMP NULL;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS last_ai_scored_at TIMESTAMP NULL;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS extra_data JSONB DEFAULT '{}'::jsonb;
@@ -167,26 +208,78 @@ BEGIN
     END IF;
 END $$;
 
-CREATE TABLE IF NOT EXISTS watchlists (
+-- ------------------------------------------------------------
+-- project_history
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS project_history (
     id SERIAL PRIMARY KEY,
-    organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-    name VARCHAR(255) NOT NULL,
-    description TEXT,
-    is_default BOOLEAN NOT NULL DEFAULT FALSE,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    overall_score DOUBLE PRECISION NOT NULL DEFAULT 0,
+    momentum_score DOUBLE PRECISION NOT NULL DEFAULT 0,
+    sentiment_score DOUBLE PRECISION NOT NULL DEFAULT 0,
+    funding_prediction DOUBLE PRECISION NOT NULL DEFAULT 0,
+    twitter_followers INTEGER NOT NULL DEFAULT 0,
+    github_stars INTEGER NOT NULL DEFAULT 0,
+    discord_members INTEGER NOT NULL DEFAULT 0,
+    market_cap DOUBLE PRECISION NOT NULL DEFAULT 0,
+    tvl DOUBLE PRECISION NOT NULL DEFAULT 0,
+    recorded_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    trigger_source VARCHAR(50) NOT NULL DEFAULT 'scraper',
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+-- ------------------------------------------------------------
+-- watchlists
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS watchlists (
+    id SERIAL PRIMARY KEY,
+    organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    created_by INTEGER NULL REFERENCES users(id) ON DELETE SET NULL,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    is_default BOOLEAN NOT NULL DEFAULT FALSE,
+    settings JSONB NOT NULL DEFAULT '{"alert_on_change": true, "alert_threshold": 5.0, "notification_channels": ["in_app"]}'::jsonb,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE watchlists
+    ADD COLUMN IF NOT EXISTS created_by INTEGER NULL REFERENCES users(id) ON DELETE SET NULL,
+    ADD COLUMN IF NOT EXISTS settings JSONB NOT NULL DEFAULT '{"alert_on_change": true, "alert_threshold": 5.0, "notification_channels": ["in_app"]}'::jsonb;
+
+-- ------------------------------------------------------------
+-- watchlist_items
+-- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS watchlist_items (
     id SERIAL PRIMARY KEY,
     watchlist_id INTEGER NOT NULL REFERENCES watchlists(id) ON DELETE CASCADE,
     project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     note TEXT,
     tag VARCHAR(100),
+    added_by INTEGER NULL REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE watchlist_items
+    ADD COLUMN IF NOT EXISTS added_by INTEGER NULL REFERENCES users(id) ON DELETE SET NULL;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'uq_watchlist_project'
+    ) THEN
+        ALTER TABLE watchlist_items
+        ADD CONSTRAINT uq_watchlist_project UNIQUE (watchlist_id, project_id);
+    END IF;
+END $$;
+
+-- ------------------------------------------------------------
+-- saved_reports
+-- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS saved_reports (
     id SERIAL PRIMARY KEY,
     organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -200,6 +293,9 @@ CREATE TABLE IF NOT EXISTS saved_reports (
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+-- ------------------------------------------------------------
+-- briefings
+-- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS briefings (
     id SERIAL PRIMARY KEY,
     organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -214,6 +310,8 @@ CREATE TABLE IF NOT EXISTS briefings (
 
 COMMIT;
 """
+
+engine = get_engine()
 
 if engine is None:
     raise RuntimeError("Database engine is not available. Check DATABASE_URL in .env")
