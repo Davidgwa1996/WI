@@ -6,8 +6,8 @@ import {
   FiCheckCircle,
   FiTrash2,
   FiAlertTriangle,
-  FiCrown,
 } from "react-icons/fi";
+import { FaCrown } from "react-icons/fa6";
 
 import Sidebar from "../components/dashboard/Sidebar";
 import DashboardShell from "../components/dashboard/DashboardShell";
@@ -205,7 +205,7 @@ const Account = () => {
           >
             <div className="app-panel-soft p-5">
               <div className="flex items-start gap-3">
-                <FiCrown className="mt-1 h-5 w-5 text-amber-500" />
+                <FaCrown className="mt-1 h-5 w-5 text-amber-500" />
                 <div>
                   <h3 className="text-base font-bold text-slate-900">
                     Ownership rule
