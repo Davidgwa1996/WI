@@ -8,29 +8,9 @@ const Login = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
 
-  const [form, setForm] = useState({
-    email: "",
-    password: "",
-  });
+  const [form, setForm] = useState({ email: "", password: "" });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-
-  const resolveRedirect = (result) => {
-    const role = String(result?.user?.role || "").toLowerCase();
-
-    if (!role) {
-      return "/organizations";
-    }
-
-    return "/dashboard";
-  };
-
-  const handleChange = (field, value) => {
-    setForm((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
-  };
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -38,9 +18,8 @@ const Login = () => {
     try {
       setSubmitting(true);
       setError("");
-
-      const result = await login(form.email.trim(), form.password);
-      navigate(resolveRedirect(result), { replace: true });
+      await login(form.email, form.password);
+      navigate("/dashboard", { replace: true });
     } catch (err) {
       setError(err?.message || "Login failed.");
     } finally {
@@ -62,10 +41,9 @@ const Login = () => {
             </h1>
 
             <p className="mt-5 text-lg leading-8 text-slate-600">
-              Public visitors can explore Home, Search AI, AI Agent, Projects,
-              and Competitors without an account. To use watchlists, reports,
-              API keys, billing, audit logs, and workspace controls, sign in
-              with your approved organization account.
+              Public visitors can explore the platform without login. Protected services
+              such as watchlists, reports, API keys, billing, audit logs, and organization
+              controls require approved account access.
             </p>
 
             <div className="mt-8 space-y-4">
@@ -73,12 +51,9 @@ const Login = () => {
                 <div className="flex items-start gap-3">
                   <FiBriefcase className="mt-1 h-5 w-5 text-cyan-600" />
                   <div>
-                    <div className="font-bold text-slate-900">
-                      New to the platform?
-                    </div>
+                    <div className="font-bold text-slate-900">Create workspace</div>
                     <p className="mt-1 text-sm leading-6 text-slate-600">
-                      Create a workspace as the owner, then invite approved
-                      users such as admins, analysts, and viewers.
+                      Only the platform owner email can create the owner workspace directly.
                     </p>
                   </div>
                 </div>
@@ -88,12 +63,9 @@ const Login = () => {
                 <div className="flex items-start gap-3">
                   <FiLock className="mt-1 h-5 w-5 text-cyan-600" />
                   <div>
-                    <div className="font-bold text-slate-900">
-                      Approved access only
-                    </div>
+                    <div className="font-bold text-slate-900">Approved access only</div>
                     <p className="mt-1 text-sm leading-6 text-slate-600">
-                      Protected services become available only after successful
-                      sign-in and role-based authorization.
+                      Admins, analysts, and viewers should join through owner invitation and approval.
                     </p>
                   </div>
                 </div>
@@ -101,11 +73,11 @@ const Login = () => {
             </div>
 
             <div className="mt-8 flex flex-wrap gap-3">
-              <Link to="/dashboard" className="btn-light">
+              <Link to="/explore" className="btn-light">
                 Explore Public Pages
               </Link>
-              <Link to="/organizations" className="btn-light">
-                Launch Workspace
+              <Link to="/register" className="btn-light">
+                Create Workspace
               </Link>
             </div>
           </div>
@@ -123,7 +95,7 @@ const Login = () => {
               <input
                 type="email"
                 value={form.email}
-                onChange={(e) => handleChange("email", e.target.value)}
+                onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
                 className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 outline-none transition focus:border-cyan-500"
                 placeholder="you@company.com"
                 required
@@ -138,7 +110,7 @@ const Login = () => {
               <input
                 type="password"
                 value={form.password}
-                onChange={(e) => handleChange("password", e.target.value)}
+                onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))}
                 className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 outline-none transition focus:border-cyan-500"
                 placeholder="Enter your password"
                 required
@@ -155,28 +127,16 @@ const Login = () => {
             <button
               type="submit"
               disabled={submitting}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-cyan-500 to-teal-500 px-5 py-3 font-semibold text-white shadow-lg shadow-cyan-500/20 transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-70"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-cyan-500 to-teal-500 px-5 py-3 font-semibold text-white shadow-lg shadow-cyan-500/20 transition hover:opacity-95 disabled:opacity-70"
             >
               {submitting ? "Signing in..." : "Sign In"}
               {!submitting ? <FiArrowRight className="h-4 w-4" /> : null}
             </button>
 
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-              Public preview remains available without login. Sign in only when
-              you want to use protected organization services.
-            </div>
-
             <p className="text-center text-sm text-slate-500">
-              No account yet?{" "}
+              Need a workspace?{" "}
               <Link to="/register" className="font-semibold text-cyan-700">
                 Create workspace
-              </Link>
-            </p>
-
-            <p className="text-center text-sm text-slate-500">
-              Invited by an owner?{" "}
-              <Link to="/accept-invite" className="font-semibold text-cyan-700">
-                Accept invite
               </Link>
             </p>
           </form>

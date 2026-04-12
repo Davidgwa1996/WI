@@ -2,6 +2,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import { AuthProvider } from "./context/AuthContext";
+import { useAuth } from "./context/AuthContext";
 
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
@@ -31,64 +32,161 @@ import AdminPanel from "./pages/AdminPanel";
 import ErrorBoundary from "./components/ErrorBoundary";
 import "./index.css";
 
-function getStoredUser() {
-  const keys = ["user", "auth_user", "currentUser"];
-
-  for (const key of keys) {
-    const raw = localStorage.getItem(key);
-    if (!raw) continue;
-
-    try {
-      return JSON.parse(raw);
-    } catch {
-      localStorage.removeItem(key);
-    }
-  }
-
-  return null;
-}
-
-function getStoredToken() {
-  return (
-    localStorage.getItem("w3i_token") ||
-    localStorage.getItem("token") ||
-    localStorage.getItem("access_token") ||
-    localStorage.getItem("auth_token") ||
-    ""
-  );
-}
-
 function RequireAuth({ children }) {
-  const token = getStoredToken();
-  const user = getStoredUser();
+  const { isAuthenticated, loading } = useAuth();
 
-  if (!token || !user) {
-    return <Navigate to="/organizations" replace />;
-  }
+  if (loading) return null;
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
 
   return children;
 }
 
 function RequireRole({ roles = [], children }) {
-  const token = getStoredToken();
-  const user = getStoredUser();
+  const { isAuthenticated, user, loading } = useAuth();
 
-  if (!token || !user) {
-    return <Navigate to="/organizations" replace />;
-  }
-
-  const userRole = String(user?.role || "").toLowerCase();
-  const normalizedRoles = roles.map((role) => String(role).toLowerCase());
-
-  if (!userRole) {
-    return <Navigate to="/organizations" replace />;
-  }
-
-  if (normalizedRoles.length > 0 && !normalizedRoles.includes(userRole)) {
+  if (loading) return null;
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!user?.role) return <Navigate to="/login" replace />;
+  if (roles.length > 0 && !roles.includes(user.role)) {
     return <Navigate to="/dashboard" replace />;
   }
 
   return children;
+}
+
+function AppRoutes() {
+  return (
+    <Routes>
+      {/* Public landing and preview */}
+      <Route path="/" element={<Landing />} />
+      <Route path="/home" element={<Navigate to="/" replace />} />
+      <Route path="/explore" element={<Navigate to="/dashboard" replace />} />
+
+      <Route path="/dashboard" element={<Dashboard />} />
+      <Route path="/projects" element={<Projects />} />
+      <Route path="/projects/:id" element={<ProjectDetail />} />
+      <Route path="/competitors" element={<Competitors />} />
+      <Route path="/search-intel" element={<SearchIntel />} />
+      <Route path="/agent" element={<AgentChat />} />
+      <Route path="/api-docs" element={<ApiDocsPage />} />
+
+      {/* Access flow */}
+      <Route path="/organizations" element={<Organizations />} />
+      <Route path="/launch-workspace" element={<Navigate to="/organizations" replace />} />
+      <Route path="/register" element={<Register />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/accept-invite" element={<AcceptInvite />} />
+
+      {/* Protected workspace pages */}
+      <Route
+        path="/watchlists"
+        element={
+          <RequireAuth>
+            <Watchlists />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/reports"
+        element={
+          <RequireAuth>
+            <Reports />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/briefings"
+        element={
+          <RequireAuth>
+            <Briefings />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/workspace"
+        element={
+          <RequireAuth>
+            <WorkspaceSettings />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/account"
+        element={
+          <RequireAuth>
+            <Account />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/billing/success"
+        element={
+          <RequireAuth>
+            <BillingSuccess />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/billing/cancel"
+        element={
+          <RequireAuth>
+            <BillingCancel />
+          </RequireAuth>
+        }
+      />
+
+      {/* Admin / owner */}
+      <Route
+        path="/api-keys"
+        element={
+          <RequireRole roles={["owner", "admin"]}>
+            <APIKeys />
+          </RequireRole>
+        }
+      />
+      <Route
+        path="/billing"
+        element={
+          <RequireRole roles={["owner", "admin"]}>
+            <Billing />
+          </RequireRole>
+        }
+      />
+
+      {/* Owner only */}
+      <Route
+        path="/audit-logs"
+        element={
+          <RequireRole roles={["owner"]}>
+            <AuditLogs />
+          </RequireRole>
+        }
+      />
+      <Route
+        path="/admin"
+        element={
+          <RequireRole roles={["owner", "admin"]}>
+            <AdminPanel />
+          </RequireRole>
+        }
+      />
+      <Route
+        path="/organizations/manage"
+        element={
+          <RequireRole roles={["owner"]}>
+            <Organizations />
+          </RequireRole>
+        }
+      />
+
+      {/* Removed old flow */}
+      <Route path="/team" element={<Navigate to="/organizations" replace />} />
+      <Route path="/members" element={<Navigate to="/organizations" replace />} />
+      <Route path="/admin/roles" element={<Navigate to="/admin" replace />} />
+
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
 }
 
 function App() {
@@ -96,146 +194,7 @@ function App() {
     <ErrorBoundary>
       <AuthProvider>
         <BrowserRouter>
-          <Routes>
-            {/* Public landing */}
-            <Route path="/" element={<Landing />} />
-            <Route path="/home" element={<Navigate to="/" replace />} />
-
-            {/* Public preview pages */}
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/projects" element={<Projects />} />
-            <Route path="/projects/:id" element={<ProjectDetail />} />
-            <Route path="/competitors" element={<Competitors />} />
-            <Route path="/search-intel" element={<SearchIntel />} />
-            <Route path="/agent" element={<AgentChat />} />
-
-            {/* Workspace / access flow */}
-            <Route path="/organizations" element={<Organizations />} />
-            <Route
-              path="/launch-workspace"
-              element={<Navigate to="/organizations" replace />}
-            />
-            <Route path="/explore" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/accept-invite" element={<AcceptInvite />} />
-
-            {/* Protected workspace pages */}
-            <Route
-              path="/watchlists"
-              element={
-                <RequireAuth>
-                  <Watchlists />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/reports"
-              element={
-                <RequireAuth>
-                  <Reports />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/briefings"
-              element={
-                <RequireAuth>
-                  <Briefings />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/workspace"
-              element={
-                <RequireAuth>
-                  <WorkspaceSettings />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/account"
-              element={
-                <RequireAuth>
-                  <Account />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/billing/success"
-              element={
-                <RequireAuth>
-                  <BillingSuccess />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/billing/cancel"
-              element={
-                <RequireAuth>
-                  <BillingCancel />
-                </RequireAuth>
-              }
-            />
-
-            {/* Admin / managed services */}
-            <Route
-              path="/api-keys"
-              element={
-                <RequireRole roles={["owner", "admin"]}>
-                  <APIKeys />
-                </RequireRole>
-              }
-            />
-            <Route
-              path="/billing"
-              element={
-                <RequireRole roles={["owner", "admin"]}>
-                  <Billing />
-                </RequireRole>
-              }
-            />
-            <Route
-              path="/audit-logs"
-              element={
-                <RequireRole roles={["owner", "admin"]}>
-                  <AuditLogs />
-                </RequireRole>
-              }
-            />
-            <Route
-              path="/api-docs"
-              element={
-                <RequireRole roles={["owner", "admin", "analyst"]}>
-                  <ApiDocsPage />
-                </RequireRole>
-              }
-            />
-
-            {/* Owner only */}
-            <Route
-              path="/admin"
-              element={
-                <RequireRole roles={["owner"]}>
-                  <AdminPanel />
-                </RequireRole>
-              }
-            />
-
-            {/* Removed pages from final product flow */}
-            <Route path="/team" element={<Navigate to="/organizations" replace />} />
-            <Route
-              path="/members"
-              element={<Navigate to="/organizations" replace />}
-            />
-            <Route
-              path="/admin/roles"
-              element={<Navigate to="/organizations" replace />}
-            />
-
-            {/* Fallback */}
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+          <AppRoutes />
         </BrowserRouter>
       </AuthProvider>
     </ErrorBoundary>

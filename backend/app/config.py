@@ -7,7 +7,6 @@ from typing import List
 
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
 load_dotenv()
 
 logger = logging.getLogger(__name__)
@@ -27,11 +26,6 @@ def _to_int(value: str | None, default: str = "0") -> int:
 
 
 def _to_list(value: str | None, default: str = "") -> List[str]:
-    """
-    Supports:
-      FRONTEND_ORIGINS=["https://site.com","http://localhost:5173"]
-      FRONTEND_ORIGINS=https://site.com,http://localhost:5173
-    """
     raw = value if value is not None else default
 
     if not raw:
@@ -74,17 +68,32 @@ class Settings:
     PORT = _to_int(os.getenv("PORT"), "8000")
     HOST = os.getenv("HOST", "0.0.0.0")
 
+    # Docs visibility
+    # Set ENABLE_DOCS=true in production if you want /docs, /redoc and openapi enabled
+    ENABLE_DOCS = _to_bool(os.getenv("ENABLE_DOCS"), "true")
+
     # ============================================
     # PRODUCT ACCESS MODEL
     # ============================================
-    # Public visitors can browse preview pages without login
     PUBLIC_DEMO_MODE = _to_bool(os.getenv("PUBLIC_DEMO_MODE"), "true")
-
-    # Allow new workspace/org registration
     ALLOW_PUBLIC_SIGNUP = _to_bool(os.getenv("ALLOW_PUBLIC_SIGNUP"), "true")
-
-    # Allow users to delete their own account
     ALLOW_SELF_DELETE = _to_bool(os.getenv("ALLOW_SELF_DELETE"), "true")
+
+    # ============================================
+    # OWNER / ADMIN RULES
+    # ============================================
+    OWNER_EMAIL = os.getenv("OWNER_EMAIL", "davidmaina@gmail.com").strip().lower()
+
+    ADMIN_EMAILS = [
+        email.strip().lower()
+        for email in _to_list(os.getenv("ADMIN_EMAILS"), default=OWNER_EMAIL)
+        if email.strip()
+    ]
+
+    if OWNER_EMAIL and OWNER_EMAIL not in ADMIN_EMAILS:
+        ADMIN_EMAILS.append(OWNER_EMAIL)
+
+    ADMIN_EMAILS = list(dict.fromkeys(ADMIN_EMAILS))
 
     # ============================================
     # FRONTEND / CORS
@@ -114,7 +123,11 @@ class Settings:
     if APP_ENV == "production":
         _validate_https_url(FRONTEND_URL, "FRONTEND_URL", APP_ENV)
         for origin in FRONTEND_ORIGINS:
-            if origin.startswith("http://") and "localhost" not in origin and "127.0.0.1" not in origin:
+            if (
+                origin.startswith("http://")
+                and "localhost" not in origin
+                and "127.0.0.1" not in origin
+            ):
                 logger.warning(
                     f"FRONTEND_ORIGINS contains insecure HTTP origin (non-localhost): {origin}"
                 )
@@ -262,6 +275,14 @@ class Settings:
         return cls.APP_ENV == "production"
 
     @classmethod
+    def is_owner_email(cls, email: str | None) -> bool:
+        return bool(email and email.strip().lower() == cls.OWNER_EMAIL)
+
+    @classmethod
+    def is_super_admin_email(cls, email: str | None) -> bool:
+        return bool(email and email.strip().lower() in cls.ADMIN_EMAILS)
+
+    @classmethod
     def validate_config(cls) -> dict:
         issues = []
         warnings = []
@@ -269,7 +290,9 @@ class Settings:
         if not cls.FRONTEND_URL:
             issues.append("FRONTEND_URL is not set")
         elif cls.is_production() and not cls.FRONTEND_URL.startswith("https://"):
-            issues.append(f"FRONTEND_URL must use HTTPS in production: {cls.FRONTEND_URL}")
+            issues.append(
+                f"FRONTEND_URL must use HTTPS in production: {cls.FRONTEND_URL}"
+            )
 
         if cls.SECRET_KEY == "change-this-in-production" and cls.is_production():
             warnings.append("SECRET_KEY is using default value - change this in production!")
@@ -286,6 +309,9 @@ class Settings:
             if not cls.TWITTER_BEARER_TOKEN:
                 warnings.append("TWITTER_BEARER_TOKEN is not set - Twitter scraping will be limited")
 
+        if not cls.OWNER_EMAIL:
+            issues.append("OWNER_EMAIL is not set")
+
         return {
             "is_valid": len(issues) == 0,
             "issues": issues,
@@ -298,6 +324,9 @@ class Settings:
             "public_demo_mode": cls.PUBLIC_DEMO_MODE,
             "allow_public_signup": cls.ALLOW_PUBLIC_SIGNUP,
             "allow_self_delete": cls.ALLOW_SELF_DELETE,
+            "owner_email": cls.OWNER_EMAIL,
+            "admin_emails": cls.ADMIN_EMAILS,
+            "enable_docs": cls.ENABLE_DOCS,
         }
 
     def as_dict(self) -> dict:
@@ -305,6 +334,7 @@ class Settings:
             "APP_NAME": self.APP_NAME,
             "APP_ENV": self.APP_ENV,
             "DEBUG": self.DEBUG,
+            "ENABLE_DOCS": self.ENABLE_DOCS,
             "API_PREFIX": self.API_PREFIX,
             "PORT": self.PORT,
             "HOST": self.HOST,
@@ -335,6 +365,8 @@ class Settings:
             "PUBLIC_DEMO_MODE": self.PUBLIC_DEMO_MODE,
             "ALLOW_PUBLIC_SIGNUP": self.ALLOW_PUBLIC_SIGNUP,
             "ALLOW_SELF_DELETE": self.ALLOW_SELF_DELETE,
+            "OWNER_EMAIL": self.OWNER_EMAIL,
+            "ADMIN_EMAILS": self.ADMIN_EMAILS,
         }
 
 

@@ -2,95 +2,76 @@ import React from "react";
 import Sidebar from "../components/dashboard/Sidebar";
 import DashboardShell from "../components/dashboard/DashboardShell";
 import Topbar from "../components/dashboard/Topbar";
-import { useDashboardStream } from "../hooks/useWebSocket";
 
-const apiBase = import.meta.env.VITE_API_URL || "";
+const docsLinks = [
+  {
+    title: "Swagger Docs",
+    href: "/docs",
+    description: "Interactive API testing interface.",
+  },
+  {
+    title: "ReDoc",
+    href: "/redoc",
+    description: "Structured API reference documentation.",
+  },
+  {
+    title: "OpenAPI JSON",
+    href: "/openapi.json",
+    description: "Raw OpenAPI schema for integrations and tooling.",
+  },
+];
+
+const endpoints = [
+  "GET /api/v1/projects",
+  "GET /api/v1/projects/{id}",
+  "GET /api/v1/projects/summary",
+  "GET /api/v1/metrics",
+  "POST /api/v1/auth/login",
+  "POST /api/v1/auth/register",
+  "GET /api/v1/users/me",
+  "DELETE /api/v1/users/me",
+];
 
 const ApiDocsPage = () => {
-  const { isConnected } = useDashboardStream();
-
   return (
-    <div className="min-h-screen bg-slate-50 xl:flex">
+    <div className="app-page xl:flex">
       <Sidebar />
-      <div className="flex-1">
+      <div className="min-w-0 flex-1 app-content">
         <DashboardShell>
           <Topbar
-            connected={isConnected}
-            title="API Documentation"
-            subtitle="Public developer entry points for your workspace platform."
+            title="API Docs"
+            subtitle="Platform API references and documentation access."
           />
 
-          <div className="space-y-6">
-            <div className="glass-card p-6">
-              <h2 className="mb-3 text-2xl font-black text-slate-900">OpenAPI</h2>
-              <p className="mb-4 text-slate-600">
-                Use the built-in API documentation below for testing and integrations.
-              </p>
-
-              <div className="space-y-3 text-sm">
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="font-semibold text-slate-900">Swagger Docs</div>
+          <div className="grid gap-6 lg:grid-cols-2">
+            <div className="app-panel p-6">
+              <h2 className="text-2xl font-black text-slate-900">OpenAPI</h2>
+              <div className="mt-5 space-y-4">
+                {docsLinks.map((item) => (
                   <a
-                    href={`${apiBase.replace(/\/api\/v1$/, "")}/docs`}
+                    key={item.href}
+                    href={item.href}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-cyan-700"
+                    className="block rounded-2xl border border-slate-200 bg-white p-5 transition hover:border-cyan-300 hover:shadow-sm"
                   >
-                    Open /docs
+                    <div className="text-lg font-bold text-slate-900">{item.title}</div>
+                    <div className="mt-1 text-cyan-700">{item.href}</div>
+                    <p className="mt-2 text-sm text-slate-500">{item.description}</p>
                   </a>
-                </div>
-
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="font-semibold text-slate-900">ReDoc</div>
-                  <a
-                    href={`${apiBase.replace(/\/api\/v1$/, "")}/redoc`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-cyan-700"
-                  >
-                    Open /redoc
-                  </a>
-                </div>
-
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="font-semibold text-slate-900">OpenAPI JSON</div>
-                  <a
-                    href={`${apiBase}/openapi.json`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-cyan-700"
-                  >
-                    Open openapi.json
-                  </a>
-                </div>
+                ))}
               </div>
             </div>
 
-            <div className="glass-card p-6">
-              <h3 className="mb-4 text-xl font-bold text-slate-900">Core Endpoints</h3>
-              <div className="grid gap-3 text-sm text-slate-700">
-                {[
-                  "GET /projects",
-                  "GET /projects/{id}",
-                  "POST /projects/refresh",
-                  "GET /watchlists",
-                  "POST /watchlists",
-                  "GET /reports",
-                  "POST /reports",
-                  "GET /briefings",
-                  "GET /search/intel",
-                  "GET /search/google",
-                  "GET /exports/projects.csv",
-                  "GET /exports/report.pdf",
-                  "POST /agent/chat",
-                  "POST /billing/checkout",
-                  "POST /billing/portal",
-                ].map((item) => (
+            <div className="app-panel p-6">
+              <h2 className="text-2xl font-black text-slate-900">Core Endpoints</h2>
+              <div className="mt-5 space-y-3">
+                {endpoints.map((ep) => (
                   <div
-                    key={item}
-                    className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
+                    key={ep}
+                    className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-mono text-sm text-slate-700"
                   >
-                    {item}
+                    {ep}
                   </div>
                 ))}
               </div>

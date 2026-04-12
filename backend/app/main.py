@@ -88,13 +88,12 @@ async def init_db_with_retry(max_retries: int = 5, delay: int = 2) -> bool:
 
 def _get_allowed_origins() -> list[str]:
     origins = list(settings.get_cors_origins() or [])
-    netlify_url = "https://web3dkintel.netlify.app"
+    netlify_url = settings.get_netlify_url()
+
     if netlify_url not in origins:
         origins.append(netlify_url)
 
-    # remove duplicates while preserving order
-    origins = list(dict.fromkeys(origins))
-    return origins
+    return list(dict.fromkeys(origins))
 
 
 allowed_origins = _get_allowed_origins()
@@ -111,6 +110,11 @@ async def lifespan(app: FastAPI):
     logger.info(f"WebSocket Path: {settings.WS_PATH}")
     logger.info(f"Frontend URL: {settings.get_frontend_url()}")
     logger.info(f"CORS Origins: {allowed_origins}")
+    logger.info(f"Public Demo Mode: {settings.PUBLIC_DEMO_MODE}")
+    logger.info(f"Allow Public Signup: {settings.ALLOW_PUBLIC_SIGNUP}")
+    logger.info(f"Allow Self Delete: {settings.ALLOW_SELF_DELETE}")
+    logger.info(f"Owner Email: {settings.OWNER_EMAIL}")
+    logger.info(f"Docs Enabled: {settings.ENABLE_DOCS}")
     logger.info("=" * 50)
 
     try:
@@ -165,9 +169,9 @@ app = FastAPI(
     title=settings.APP_NAME,
     debug=settings.DEBUG,
     redirect_slashes=False,
-    docs_url="/docs" if settings.DEBUG else None,
-    redoc_url="/redoc" if settings.DEBUG else None,
-    openapi_url=f"{settings.API_PREFIX}/openapi.json" if settings.DEBUG else None,
+    docs_url="/docs" if settings.ENABLE_DOCS else None,
+    redoc_url="/redoc" if settings.ENABLE_DOCS else None,
+    openapi_url=f"{settings.API_PREFIX}/openapi.json" if settings.ENABLE_DOCS else None,
     lifespan=lifespan,
 )
 
@@ -287,6 +291,10 @@ async def root():
         "environment": settings.APP_ENV,
         "frontend_url": settings.get_frontend_url(),
         "cors_origins": allowed_origins,
+        "public_demo_mode": settings.PUBLIC_DEMO_MODE,
+        "allow_public_signup": settings.ALLOW_PUBLIC_SIGNUP,
+        "allow_self_delete": settings.ALLOW_SELF_DELETE,
+        "enable_docs": settings.ENABLE_DOCS,
     }
 
 
@@ -431,6 +439,7 @@ async def list_all_routes():
         "total": len(routes),
         "routes": routes,
         "invites_router_loaded": any("/invites" in r["path"] for r in routes),
+        "docs_enabled": settings.ENABLE_DOCS,
     }
 
 
@@ -600,7 +609,7 @@ async def websocket_endpoint(websocket: WebSocket):
 # ============================================
 # DEBUG ENDPOINT
 # ============================================
-if settings.DEBUG:
+if settings.DEBUG or settings.ENABLE_DOCS:
     @app.get("/debug/config")
     async def debug_config():
         return {
@@ -608,6 +617,12 @@ if settings.DEBUG:
             "cors_origins": settings.get_cors_origins(),
             "environment": settings.APP_ENV,
             "invite_expiry_hours": settings.INVITE_EXPIRY_HOURS,
+            "public_demo_mode": settings.PUBLIC_DEMO_MODE,
+            "allow_public_signup": settings.ALLOW_PUBLIC_SIGNUP,
+            "allow_self_delete": settings.ALLOW_SELF_DELETE,
+            "owner_email": settings.OWNER_EMAIL,
+            "admin_emails": settings.ADMIN_EMAILS,
+            "enable_docs": settings.ENABLE_DOCS,
         }
 
 

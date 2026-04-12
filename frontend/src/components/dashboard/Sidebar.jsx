@@ -1,154 +1,131 @@
-import React, { useMemo } from "react";
+import React from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import {
   FiHome,
+  FiCompass,
   FiFolder,
   FiUsers,
-  FiSettings,
-  FiKey,
-  FiCreditCard,
-  FiFileText,
-  FiLogOut,
-  FiShield,
-  FiUser,
-  FiStar,
-  FiZap,
   FiSearch,
   FiCpu,
+  FiStar,
+  FiFileText,
+  FiZap,
+  FiSettings,
+  FiUser,
+  FiKey,
+  FiCreditCard,
+  FiShield,
+  FiLogOut,
   FiBriefcase,
-  FiLayers,
+  FiChevronRight,
 } from "react-icons/fi";
+import { FaCrown } from "react-icons/fa6";
 import { useAuth } from "../../context/AuthContext";
-
-const publicNavItems = [
-  { label: "Home", to: "/dashboard", icon: FiHome },
-  { label: "Search AI", to: "/search-intel", icon: FiSearch },
-  { label: "AI Agent", to: "/agent", icon: FiCpu },
-  { label: "Projects", to: "/projects", icon: FiFolder },
-  { label: "Competitors", to: "/competitors", icon: FiUsers },
-  { label: "Organizations", to: "/organizations", icon: FiBriefcase },
-];
-
-const protectedNavItems = [
-  { label: "Watchlists", to: "/watchlists", icon: FiStar },
-  { label: "Reports", to: "/reports", icon: FiFileText },
-  { label: "Briefings", to: "/briefings", icon: FiZap },
-  { label: "Workspace", to: "/workspace", icon: FiSettings },
-  { label: "Account", to: "/account", icon: FiUser },
-];
-
-const adminNavItems = [
-  { label: "API Keys", to: "/api-keys", icon: FiKey },
-  { label: "Billing", to: "/billing", icon: FiCreditCard },
-  { label: "Audit Logs", to: "/audit-logs", icon: FiLayers },
-  { label: "API Docs", to: "/api-docs", icon: FiFileText },
-];
-
-const ownerNavItems = [
-  { label: "Admin", to: "/admin", icon: FiShield },
-];
 
 const Sidebar = () => {
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, logout, isAuthenticated } = useAuth();
 
   const role = String(user?.role || "").toLowerCase();
-  const isLoggedIn = !!user;
   const isOwner = role === "owner";
   const isAdmin = role === "admin";
-  const isAnalyst = role === "analyst";
 
-  const visibleProtectedNav = useMemo(() => {
-    if (!isLoggedIn) return [];
-    return protectedNavItems;
-  }, [isLoggedIn]);
+  const publicItems = [
+    { label: "Home", to: "/", icon: FiHome },
+    { label: "Explore", to: "/dashboard", icon: FiCompass },
+    { label: "Projects", to: "/projects", icon: FiFolder },
+    { label: "Competitors", to: "/competitors", icon: FiUsers },
+    { label: "Search AI", to: "/search-intel", icon: FiSearch },
+    { label: "AI Agent", to: "/agent", icon: FiCpu },
+  ];
 
-  const visibleAdminNav = useMemo(() => {
-    if (!isLoggedIn) return [];
+  const workspaceItems = isAuthenticated
+    ? [
+        { label: "Watchlists", to: "/watchlists", icon: FiStar },
+        { label: "Reports", to: "/reports", icon: FiFileText },
+        { label: "Briefings", to: "/briefings", icon: FiZap },
+        { label: "Workspace", to: "/workspace", icon: FiSettings },
+        { label: "Account", to: "/account", icon: FiUser },
+      ]
+    : [];
 
-    if (isOwner || isAdmin) {
-      return adminNavItems;
-    }
+  const managedItems =
+    isOwner || isAdmin
+      ? [
+          { label: "API Keys", to: "/api-keys", icon: FiKey },
+          { label: "Billing", to: "/billing", icon: FiCreditCard },
+        ]
+      : [];
 
-    if (isAnalyst) {
-      return adminNavItems.filter((item) => item.to === "/api-docs");
-    }
-
-    return [];
-  }, [isLoggedIn, isOwner, isAdmin, isAnalyst]);
-
-  const visibleOwnerNav = useMemo(() => {
-    if (!isLoggedIn || !isOwner) return [];
-    return ownerNavItems;
-  }, [isLoggedIn, isOwner]);
+  const ownerItems = isOwner
+    ? [
+        { label: "Organizations", to: "/organizations", icon: FiBriefcase },
+        { label: "Audit Logs", to: "/audit-logs", icon: FiShield },
+        { label: "Admin", to: "/admin", icon: FaCrown },
+      ]
+    : [];
 
   const handleLogout = async () => {
     try {
-      localStorage.removeItem("w3i_token");
-      localStorage.removeItem("token");
-      localStorage.removeItem("access_token");
-      localStorage.removeItem("auth_token");
-      localStorage.removeItem("user");
-      localStorage.removeItem("auth_user");
-      localStorage.removeItem("currentUser");
-      sessionStorage.clear();
-    } catch (e) {
-      console.warn("Could not fully clear local session:", e);
-    }
-
-    try {
       await logout();
-    } catch (e) {
-      console.warn("Logout helper failed:", e);
+    } catch {
+      // ignore logout failure and continue redirect
     }
-
-    navigate("/");
+    navigate("/login");
   };
 
-  const renderNavItem = (item) => {
-    const Icon = item.icon;
+  const renderNav = (items) =>
+    items.map((item) => {
+      const Icon = item.icon;
 
-    return (
-      <NavLink
-        key={item.to}
-        to={item.to}
-        className={({ isActive }) =>
-          `nav-link ${
-            isActive
-              ? "active"
-              : ""
-          }`
-        }
-      >
-        <Icon className="h-5 w-5" />
-        <span>{item.label}</span>
-      </NavLink>
-    );
-  };
+      return (
+        <NavLink
+          key={item.to}
+          to={item.to}
+          className={({ isActive }) =>
+            `group flex items-center justify-between rounded-2xl px-4 py-3 text-sm font-semibold transition ${
+              isActive
+                ? "bg-gradient-to-r from-cyan-500 to-teal-500 text-white shadow-lg shadow-cyan-500/20"
+                : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+            }`
+          }
+        >
+          <div className="flex items-center gap-3">
+            <Icon className="h-5 w-5" />
+            <span>{item.label}</span>
+          </div>
+          <FiChevronRight className="h-4 w-4 opacity-0 transition group-hover:opacity-100" />
+        </NavLink>
+      );
+    });
 
   return (
-    <aside className="app-sidebar hidden xl:flex xl:w-[280px] xl:flex-col">
+    <aside className="hidden xl:flex xl:w-[300px] xl:flex-col xl:border-r xl:border-slate-200 xl:bg-white">
       <div className="border-b border-slate-200 px-5 py-5">
         <div className="mb-4 flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-r from-cyan-500 to-teal-500 shadow-lg shadow-cyan-500/20">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-r from-cyan-500 to-teal-500 shadow-lg shadow-cyan-500/20">
             <FiShield className="h-5 w-5 text-white" />
           </div>
+
           <div>
             <div className="text-lg font-black tracking-tight text-slate-900">
               Web3 Intel
             </div>
-            <div className="text-sm text-slate-500">AI-powered workspace</div>
+            <div className="text-sm text-slate-500">Platform navigation</div>
           </div>
         </div>
 
-        <div className="sidebar-card p-4">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
           <div className="text-sm font-semibold text-slate-900">
             {user?.full_name || "Public Visitor"}
           </div>
+
           <div className="mt-1 text-sm text-slate-500">
             {user?.email || "Preview mode"}
           </div>
-          <div className="mt-3 inline-flex rounded-full bg-cyan-100 px-3 py-1 text-xs font-semibold text-cyan-700">
+
+          <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-cyan-100 px-3 py-1 text-xs font-semibold text-cyan-700 capitalize">
+            {isOwner ? <FaCrown className="h-3.5 w-3.5 text-amber-500" /> : null}
             {user?.role || "public"}
           </div>
         </div>
@@ -156,49 +133,40 @@ const Sidebar = () => {
 
       <div className="flex-1 overflow-y-auto px-4 py-5">
         <div className="mb-3 px-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
-          Public Preview
+          Public Access
         </div>
+        <nav className="space-y-2">{renderNav(publicItems)}</nav>
 
-        <nav className="space-y-2">
-          {publicNavItems.map(renderNavItem)}
-        </nav>
-
-        {visibleProtectedNav.length > 0 ? (
+        {workspaceItems.length > 0 ? (
           <>
-            <div className="mb-3 mt-6 px-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
+            <div className="mb-3 mt-7 px-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
               Workspace
             </div>
-            <nav className="space-y-2">
-              {visibleProtectedNav.map(renderNavItem)}
-            </nav>
+            <nav className="space-y-2">{renderNav(workspaceItems)}</nav>
           </>
         ) : null}
 
-        {visibleAdminNav.length > 0 ? (
+        {managedItems.length > 0 ? (
           <>
-            <div className="mb-3 mt-6 px-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
+            <div className="mb-3 mt-7 px-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
               Managed Services
             </div>
-            <nav className="space-y-2">
-              {visibleAdminNav.map(renderNavItem)}
-            </nav>
+            <nav className="space-y-2">{renderNav(managedItems)}</nav>
           </>
         ) : null}
 
-        {visibleOwnerNav.length > 0 ? (
+        {ownerItems.length > 0 ? (
           <>
-            <div className="mb-3 mt-6 px-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
+            <div className="mb-3 mt-7 px-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
               Owner Controls
             </div>
-            <nav className="space-y-2">
-              {visibleOwnerNav.map(renderNavItem)}
-            </nav>
+            <nav className="space-y-2">{renderNav(ownerItems)}</nav>
           </>
         ) : null}
       </div>
 
       <div className="border-t border-slate-200 px-4 py-4">
-        {isLoggedIn ? (
+        {isAuthenticated ? (
           <button
             type="button"
             onClick={handleLogout}
@@ -210,11 +178,11 @@ const Sidebar = () => {
         ) : (
           <button
             type="button"
-            onClick={() => navigate("/organizations")}
+            onClick={() => navigate("/login")}
             className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
           >
-            <FiBriefcase className="h-5 w-5" />
-            <span>Launch Workspace</span>
+            <FiUser className="h-5 w-5" />
+            <span>Sign In</span>
           </button>
         )}
       </div>

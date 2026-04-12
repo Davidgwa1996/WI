@@ -10,15 +10,27 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
     UniqueConstraint,
-    Index,
 )
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
+
+
+def default_dict():
+    return {}
+
+
+def default_watchlist_settings():
+    return {
+        "alert_on_change": True,
+        "alert_threshold": 5.0,
+        "notification_channels": ["in_app"],
+    }
 
 
 class TimestampMixin:
@@ -44,7 +56,6 @@ class Organization(Base, TimestampMixin):
     stripe_customer_id = Column(String(255), nullable=True)
     stripe_subscription_id = Column(String(255), nullable=True)
 
-    # Relationships
     users = relationship(
         "User",
         back_populates="organization",
@@ -120,12 +131,11 @@ class User(Base, TimestampMixin):
     email = Column(String(255), nullable=False, unique=True, index=True)
     password_hash = Column(String(255), nullable=False)
 
-    role = Column(String(50), default="viewer", nullable=False)  # owner, admin, analyst, member, viewer
+    role = Column(String(50), default="viewer", nullable=False)  # owner, admin, analyst, viewer
     is_active = Column(Boolean, default=True, nullable=False)
     is_verified = Column(Boolean, default=False, nullable=False)
     last_login_at = Column(DateTime, nullable=True)
 
-    # Relationships
     organization = relationship("Organization", back_populates="users")
 
     audit_logs = relationship(
@@ -211,7 +221,7 @@ class AuditLog(Base, TimestampMixin):
 
     ip_address = Column(String(100), nullable=True)
     user_agent = Column(Text, nullable=True)
-    metadata_json = Column(JSON, default=dict)
+    metadata_json = Column(JSON, default=default_dict)
 
     organization = relationship("Organization", back_populates="audit_logs")
     actor = relationship("User", back_populates="audit_logs", foreign_keys=[actor_user_id])
@@ -256,7 +266,7 @@ class TeamInvite(Base, TimestampMixin):
     )
 
     email = Column(String(255), nullable=False, index=True)
-    role = Column(String(50), default="viewer", nullable=False)  # owner, admin, analyst, member, viewer
+    role = Column(String(50), default="viewer", nullable=False)  # owner, admin, analyst, viewer
     token = Column(String(255), nullable=False, unique=True, index=True)
     invited_by_user_id = Column(
         Integer,
@@ -320,11 +330,21 @@ class Project(Base, TimestampMixin):
     is_active = Column(Boolean, default=True, nullable=False)
     is_featured = Column(Boolean, default=False, nullable=False)
 
-    extra_data = Column(JSON, default=dict)
+    extra_data = Column(JSON, default=default_dict)
 
     organization = relationship("Organization", back_populates="projects")
-    history = relationship("ProjectHistory", back_populates="project", cascade="all, delete-orphan", passive_deletes=True)
-    watchlist_items = relationship("WatchlistItem", back_populates="project", cascade="all, delete-orphan", passive_deletes=True)
+    history = relationship(
+        "ProjectHistory",
+        back_populates="project",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    watchlist_items = relationship(
+        "WatchlistItem",
+        back_populates="project",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
     __table_args__ = (
         Index("idx_project_sector_stage", "sector", "stage"),
@@ -431,18 +451,16 @@ class Watchlist(Base, TimestampMixin):
     description = Column(Text, nullable=True)
     is_default = Column(Boolean, default=False, nullable=False)
 
-    settings = Column(
-        JSON,
-        default={
-            "alert_on_change": True,
-            "alert_threshold": 5.0,
-            "notification_channels": ["in_app"],
-        },
-    )
+    settings = Column(JSON, default=default_watchlist_settings)
 
     organization = relationship("Organization", back_populates="watchlists")
     creator = relationship("User", foreign_keys=[created_by], back_populates="created_watchlists")
-    items = relationship("WatchlistItem", back_populates="watchlist", cascade="all, delete-orphan", passive_deletes=True)
+    items = relationship(
+        "WatchlistItem",
+        back_populates="watchlist",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
     def __repr__(self):
         return f"<Watchlist(id={self.id}, name='{self.name}', organization_id={self.organization_id})>"
@@ -502,7 +520,7 @@ class SavedReport(Base, TimestampMixin):
     type = Column(String(100), default="Custom", nullable=False)
     audience = Column(String(100), default="Internal", nullable=False)
     projects_count = Column(Integer, default=0, nullable=False)
-    report_data = Column(JSON, default=dict)
+    report_data = Column(JSON, default=default_dict)
 
     organization = relationship("Organization", back_populates="saved_reports")
 

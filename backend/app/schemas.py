@@ -2,7 +2,7 @@
 
 import re
 from datetime import datetime
-from typing import Any, Optional, List, Dict, Literal
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
@@ -33,7 +33,7 @@ def validate_slug(value: str) -> str:
 
 
 def validate_role(value: str) -> str:
-    valid_roles = ["owner", "admin", "analyst", "member", "viewer"]
+    valid_roles = ["owner", "admin", "analyst", "viewer"]
     if value not in valid_roles:
         raise ValueError(f"Role must be one of: {', '.join(valid_roles)}")
     return value
@@ -502,7 +502,7 @@ class WatchlistCreate(BaseModel):
     is_default: bool = False
     alert_on_change: bool = True
     alert_threshold: float = 5.0
-    notification_channels: List[str] = ["in_app"]
+    notification_channels: List[str] = Field(default_factory=lambda: ["in_app"])
 
 
 class WatchlistUpdate(BaseModel):
@@ -582,7 +582,13 @@ class WatchlistChangeDetection(BaseModel):
 class WatchlistAlert(BaseModel):
     project_id: int
     project_name: str
-    type: Literal["high_conviction", "low_conviction", "high_momentum", "funding_potential", "anomaly"]
+    type: Literal[
+        "high_conviction",
+        "low_conviction",
+        "high_momentum",
+        "funding_potential",
+        "anomaly",
+    ]
     message: str
     severity: Literal["info", "warning", "success", "critical"]
     timestamp: str
