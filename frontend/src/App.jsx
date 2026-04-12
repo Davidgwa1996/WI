@@ -2,7 +2,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import { AuthProvider } from "./context/AuthContext";
-import ProtectedRoute from "./components/auth/ProtectedRoute";
+import PublicRoute from "./components/auth/PublicRoute";
 import RoleGuard from "./components/auth/RoleGuard";
 
 import Landing from "./pages/Landing";
@@ -32,7 +32,8 @@ import BillingCancel from "./pages/BillingCancel";
 import AuditLogs from "./pages/AuditLogs";
 import AdminRoles from "./pages/AdminRoles";
 import ApiDocsPage from "./pages/ApiDocsPage";
-import Organizations from "./pages/Organizations";  // ✅ New import
+import Organizations from "./pages/Organizations";
+import AdminPanel from "./pages/AdminPanel"; // ✅ new super admin panel
 
 import ErrorBoundary from "./components/ErrorBoundary";
 import "./index.css";
@@ -43,206 +44,219 @@ function App() {
       <AuthProvider>
         <BrowserRouter>
           <Routes>
+            {/* Public routes (no auth required) */}
             <Route path="/" element={<Landing />} />
             <Route path="/home" element={<Navigate to="/" replace />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/accept-invite" element={<AcceptInvite />} />
 
+            {/* Routes that are viewable in public preview mode (with demo banner) */}
             <Route
               path="/dashboard"
               element={
-                <ProtectedRoute>
+                <PublicRoute>
                   <Dashboard />
-                </ProtectedRoute>
+                </PublicRoute>
               }
             />
 
             <Route
               path="/projects"
               element={
-                <ProtectedRoute>
+                <PublicRoute>
                   <Projects />
-                </ProtectedRoute>
+                </PublicRoute>
               }
             />
 
             <Route
               path="/projects/:id"
               element={
-                <ProtectedRoute>
+                <PublicRoute>
                   <ProjectDetail />
-                </ProtectedRoute>
+                </PublicRoute>
               }
             />
 
             <Route
               path="/competitors"
               element={
-                <ProtectedRoute>
+                <PublicRoute>
                   <Competitors />
-                </ProtectedRoute>
+                </PublicRoute>
               }
             />
 
             <Route
               path="/watchlists"
               element={
-                <ProtectedRoute>
+                <PublicRoute>
                   <Watchlists />
-                </ProtectedRoute>
+                </PublicRoute>
               }
             />
 
             <Route
               path="/reports"
               element={
-                <ProtectedRoute>
+                <PublicRoute>
                   <Reports />
-                </ProtectedRoute>
+                </PublicRoute>
               }
             />
 
             <Route
               path="/briefings"
               element={
-                <ProtectedRoute>
+                <PublicRoute>
                   <Briefings />
-                </ProtectedRoute>
+                </PublicRoute>
               }
             />
 
             <Route
               path="/search-intel"
               element={
-                <ProtectedRoute>
+                <PublicRoute>
                   <SearchIntel />
-                </ProtectedRoute>
+                </PublicRoute>
               }
             />
 
             <Route
               path="/agent"
               element={
-                <ProtectedRoute>
+                <PublicRoute>
                   <AgentChat />
-                </ProtectedRoute>
+                </PublicRoute>
               }
             />
 
             <Route
               path="/workspace"
               element={
-                <ProtectedRoute>
+                <PublicRoute>
                   <WorkspaceSettings />
-                </ProtectedRoute>
+                </PublicRoute>
               }
             />
 
             <Route
               path="/team"
               element={
-                <ProtectedRoute>
+                <PublicRoute>
                   <TeamInvites />
-                </ProtectedRoute>
+                </PublicRoute>
               }
             />
 
             <Route
               path="/members"
               element={
-                <ProtectedRoute>
+                <PublicRoute>
                   <RoleGuard roles={["owner", "admin"]}>
                     <TeamMembers />
                   </RoleGuard>
-                </ProtectedRoute>
+                </PublicRoute>
               }
             />
 
             <Route
               path="/account"
               element={
-                <ProtectedRoute>
+                <PublicRoute>
                   <Account />
-                </ProtectedRoute>
+                </PublicRoute>
               }
             />
 
             <Route
               path="/api-keys"
               element={
-                <ProtectedRoute>
+                <PublicRoute>
                   <APIKeys />
-                </ProtectedRoute>
+                </PublicRoute>
               }
             />
 
             <Route
               path="/billing"
               element={
-                <ProtectedRoute>
+                <PublicRoute>
                   <Billing />
-                </ProtectedRoute>
+                </PublicRoute>
               }
             />
 
             <Route
               path="/billing/success"
               element={
-                <ProtectedRoute>
+                <PublicRoute>
                   <BillingSuccess />
-                </ProtectedRoute>
+                </PublicRoute>
               }
             />
 
             <Route
               path="/billing/cancel"
               element={
-                <ProtectedRoute>
+                <PublicRoute>
                   <BillingCancel />
-                </ProtectedRoute>
+                </PublicRoute>
               }
             />
 
             <Route
               path="/audit-logs"
               element={
-                <ProtectedRoute>
+                <PublicRoute>
                   <AuditLogs />
-                </ProtectedRoute>
+                </PublicRoute>
               }
             />
 
             <Route
               path="/admin/roles"
               element={
-                <ProtectedRoute>
+                <PublicRoute>
                   <RoleGuard roles={["owner", "admin"]}>
                     <AdminRoles />
                   </RoleGuard>
-                </ProtectedRoute>
+                </PublicRoute>
               }
             />
 
             <Route
               path="/api-docs"
               element={
-                <ProtectedRoute>
+                <PublicRoute>
                   <ApiDocsPage />
-                </ProtectedRoute>
+                </PublicRoute>
               }
             />
 
-            {/* ✅ New Organizations route – only visible to owners (inside the page we enforce role) */}
+            {/* Organizations page (super admin can see all, owners see their own) */}
             <Route
               path="/organizations"
               element={
-                <ProtectedRoute>
+                <PublicRoute>
                   <Organizations />
-                </ProtectedRoute>
+                </PublicRoute>
               }
             />
 
+            {/* Super admin panel – only accessible to super admin (enforced inside component) */}
+            <Route
+              path="/admin"
+              element={
+                <PublicRoute>
+                  <AdminPanel />
+                </PublicRoute>
+              }
+            />
+
+            {/* Catch-all redirect */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>

@@ -6,35 +6,45 @@ import {
   FiZap,
   FiBarChart2,
   FiTrendingUp,
+  FiActivity,
+  FiCpu,
 } from "react-icons/fi";
 
 const FeatureCard = ({ icon: Icon, title, text }) => (
-  <div className="glass-card p-6">
-    <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-gradient shadow-lg shadow-cyan-500/20">
+  <div className="glass-card p-6 transition-all duration-300 hover:scale-[1.02]">
+    <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-r from-brand-500 to-teal-500 shadow-lg shadow-brand-500/20">
       <Icon className="h-6 w-6 text-white" />
     </div>
-    <h3 className="mb-2 text-xl font-bold text-slate-900">{title}</h3>
-    <p className="text-slate-600">{text}</p>
+    <h3 className="mb-2 text-xl font-bold text-dark-text">{title}</h3>
+    <p className="text-slate-400">{text}</p>
   </div>
 );
 
 const Landing = () => {
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
+    <div className="min-h-screen bg-dark-bg text-dark-text">
+      {/* Hero Section */}
       <section className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(6,182,212,0.15),_transparent_25%),radial-gradient(circle_at_bottom_left,_rgba(20,184,166,0.12),_transparent_25%)]" />
+        {/* Animated background gradients */}
+        <div className="absolute inset-0 bg-hero-pattern" />
+        <div className="absolute -top-40 -right-40 h-80 w-80 rounded-full bg-brand-500/20 blur-3xl" />
+        <div className="absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-teal-500/20 blur-3xl" />
+
         <div className="relative mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
           <div className="grid items-center gap-12 lg:grid-cols-2">
+            {/* Left column */}
             <div>
-              <div className="mb-4 inline-flex rounded-full border border-cyan-200 bg-cyan-50 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-700">
+              <div className="mb-4 inline-flex rounded-full border border-brand-500/30 bg-brand-500/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-brand-400">
                 Enterprise AI Intelligence
               </div>
 
-              <h1 className="text-5xl font-black tracking-tight text-slate-900 md:text-6xl">
-                Real-time Web3 intelligence built for serious decision-making
+              <h1 className="text-5xl font-black tracking-tight md:text-6xl">
+                <span className="gradient-text">Real-time Web3 intelligence</span>
+                <br />
+                built for serious decision-making
               </h1>
 
-              <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-600">
+              <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-300">
                 Track projects, score conviction, detect risk, monitor momentum,
                 and turn fragmented Web3 signals into structured intelligence for
                 teams, analysts, and global organizations.
@@ -43,79 +53,72 @@ const Landing = () => {
               <div className="mt-8 flex flex-col gap-4 sm:flex-row">
                 <Link
                   to="/register"
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-brand-gradient px-6 py-4 font-semibold text-white shadow-lg shadow-cyan-500/20 transition hover:opacity-95"
+                  className="btn-primary group"
                 >
                   Launch Workspace
-                  <FiArrowRight className="h-5 w-5" />
+                  <FiArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
                 </Link>
 
                 <Link
                   to="/login"
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-white px-6 py-4 font-semibold text-slate-800 transition hover:bg-slate-50"
+                  className="btn-secondary"
                 >
                   Sign In
                 </Link>
               </div>
 
               <div className="mt-8 grid gap-4 sm:grid-cols-3">
-                <div className="rounded-2xl border border-slate-200 bg-white/80 p-4 backdrop-blur">
-                  <div className="text-2xl font-black text-slate-900">AI</div>
-                  <div className="mt-1 text-sm text-slate-500">Decision support</div>
+                <div className="glass-card p-4 text-center">
+                  <div className="text-2xl font-black text-brand-400">AI</div>
+                  <div className="mt-1 text-sm text-slate-400">Decision support</div>
                 </div>
-                <div className="rounded-2xl border border-slate-200 bg-white/80 p-4 backdrop-blur">
-                  <div className="text-2xl font-black text-slate-900">Live</div>
-                  <div className="mt-1 text-sm text-slate-500">Realtime tracking</div>
+                <div className="glass-card p-4 text-center">
+                  <div className="text-2xl font-black text-brand-400">Live</div>
+                  <div className="mt-1 text-sm text-slate-400">Realtime tracking</div>
                 </div>
-                <div className="rounded-2xl border border-slate-200 bg-white/80 p-4 backdrop-blur">
-                  <div className="text-2xl font-black text-slate-900">B2B</div>
-                  <div className="mt-1 text-sm text-slate-500">Enterprise-ready</div>
+                <div className="glass-card p-4 text-center">
+                  <div className="text-2xl font-black text-brand-400">B2B</div>
+                  <div className="mt-1 text-sm text-slate-400">Enterprise-ready</div>
                 </div>
               </div>
             </div>
 
-            <div className="glass-card p-8">
+            {/* Right column – Live Intelligence Snapshot */}
+            <div className="glass-card p-6 md:p-8">
               <div className="mb-6 flex items-center justify-between">
                 <div>
-                  <div className="text-sm font-semibold text-cyan-700">
+                  <div className="text-sm font-semibold text-brand-400">
                     Opportunity Radar
                   </div>
-                  <div className="text-2xl font-black text-slate-900">
+                  <div className="text-2xl font-black text-dark-text">
                     Live Intelligence Snapshot
                   </div>
                 </div>
-                <div className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+                <div className="flex items-center gap-2 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-400">
+                  <span className="relative flex h-2 w-2">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
+                  </span>
                   Live
                 </div>
               </div>
 
               <div className="space-y-4">
                 {[
-                  {
-                    name: "Project Atlas",
-                    score: "92%",
-                    tag: "High Conviction",
-                  },
-                  {
-                    name: "ChainNova",
-                    score: "81%",
-                    tag: "Watchlist",
-                  },
-                  {
-                    name: "DefiPulseX",
-                    score: "67%",
-                    tag: "Emerging",
-                  },
+                  { name: "Project Atlas", score: "92%", tag: "High Conviction" },
+                  { name: "ChainNova", score: "81%", tag: "Watchlist" },
+                  { name: "DefiPulseX", score: "67%", tag: "Emerging" },
                 ].map((item) => (
                   <div
                     key={item.name}
-                    className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                    className="rounded-2xl border border-slate-800 bg-dark-panel/50 p-4 transition hover:border-brand-500/30"
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <div className="font-bold text-slate-900">{item.name}</div>
-                        <div className="mt-1 text-sm text-slate-500">{item.tag}</div>
+                        <div className="font-bold text-dark-text">{item.name}</div>
+                        <div className="mt-1 text-sm text-slate-400">{item.tag}</div>
                       </div>
-                      <div className="text-xl font-black text-cyan-700">
+                      <div className="text-xl font-black text-brand-400">
                         {item.score}
                       </div>
                     </div>
@@ -123,11 +126,12 @@ const Landing = () => {
                 ))}
               </div>
 
-              <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
-                <div className="text-sm font-semibold text-slate-500">
+              <div className="mt-6 rounded-2xl border border-brand-500/20 bg-dark-panel/30 p-5 backdrop-blur-sm">
+                <div className="flex items-center gap-2 text-sm font-semibold text-brand-400">
+                  <FiActivity className="h-4 w-4" />
                   AI briefing
                 </div>
-                <div className="mt-2 text-sm leading-7 text-slate-600">
+                <div className="mt-2 text-sm leading-7 text-slate-300">
                   Developer activity is strengthening across tracked projects,
                   while only a smaller segment is showing strong multi-signal
                   conviction. This helps teams filter hype from real traction.
@@ -138,12 +142,13 @@ const Landing = () => {
         </div>
       </section>
 
+      {/* Features Section */}
       <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
         <div className="mb-10 text-center">
-          <h2 className="text-4xl font-black tracking-tight text-slate-900">
-            Built for modern intelligence teams
+          <h2 className="text-4xl font-black tracking-tight">
+            <span className="gradient-text">Built for modern intelligence teams</span>
           </h2>
-          <p className="mx-auto mt-3 max-w-2xl text-slate-500">
+          <p className="mx-auto mt-3 max-w-2xl text-slate-400">
             From project discovery to risk monitoring, every workflow is designed
             for clarity, speed, and enterprise adoption.
           </p>
@@ -172,6 +177,19 @@ const Landing = () => {
           />
         </div>
       </section>
+
+      {/* Tech stack footer (optional) */}
+      <footer className="border-t border-slate-800 py-8 text-center text-sm text-slate-500">
+        <div className="flex flex-wrap items-center justify-center gap-6">
+          <span className="flex items-center gap-2">
+            <FiCpu className="h-4 w-4" /> FastAPI + React
+          </span>
+          <span className="flex items-center gap-2">
+            <FiZap className="h-4 w-4" /> WebSocket Streaming
+          </span>
+          <span>© 2026 Web3 Intel. All rights reserved.</span>
+        </div>
+      </footer>
     </div>
   );
 };

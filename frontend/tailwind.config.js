@@ -4,6 +4,7 @@ export default {
     "./index.html",
     "./src/**/*.{js,jsx,ts,tsx}"
   ],
+  darkMode: "class", // Enable dark mode via class
   theme: {
     extend: {
       colors: {
@@ -28,25 +29,15 @@ export default {
         warning: "#f59e0b",
         danger: "#ef4444",
         info: "#3b82f6",
-        // Light theme colors (no black background)
-        light: {
-          bg: "#f8fafc",        // Light background
-          panel: "#ffffff",      // White panel
-          card: "#ffffff",       // White card background
-          border: "#e2e8f0",     // Border color
-          text: "#0f172a",       // Dark text for readability
-          muted: "#64748b",      // Muted text
-          hover: "#f1f5f9"       // Hover state
-        },
-        // Dark theme colors (optional - for dark mode toggle)
+        // Dark theme colors (consistent with screenshots)
         dark: {
-          bg: "#0f172a",
-          panel: "#1e293b",
-          card: "#334155",
-          border: "#475569",
-          text: "#f8fafc",
-          muted: "#94a3b8",
-          hover: "#1e293b"
+          bg: "#0a0a0f",        // Deep dark background
+          panel: "#111827",      // Slightly lighter for cards/panels
+          card: "#1e293b",       // Card background
+          border: "#1e293b",     // Border color
+          text: "#f8fafc",       // Primary text
+          muted: "#94a3b8",      // Muted text
+          hover: "#1e293b"       // Hover state
         },
         // Score-based colors
         conviction: {
@@ -72,17 +63,15 @@ export default {
       },
       boxShadow: {
         glow: "0 0 0 1px rgba(34,211,238,0.15), 0 8px 30px rgba(6,182,212,0.18)",
-        card: "0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)",
-        'card-hover': "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.02)",
-        'glow-cyan': "0 0 20px rgba(6, 182, 212, 0.3)",
-        'glow-emerald': "0 0 20px rgba(16, 185, 129, 0.3)",
-        inner: "inset 0 2px 4px 0 rgba(0, 0, 0, 0.05)"
+        card: "0 8px 30px rgba(0,0,0,0.3)",
+        'card-hover': "0 20px 35px -10px rgba(0,0,0,0.5), 0 0 0 1px rgba(34,211,238,0.1)",
+        'glow-cyan': "0 0 20px rgba(6,182,212,0.3)",
+        'glow-emerald': "0 0 20px rgba(16,185,129,0.3)",
+        inner: "inset 0 2px 4px 0 rgba(0,0,0,0.05)"
       },
       backgroundImage: {
-        "hero-grid": "radial-gradient(circle at top, rgba(6,182,212,0.08), transparent 50%), linear-gradient(180deg, #f8fafc 0%, #ffffff 100%)",
-        "brand-gradient": "linear-gradient(135deg, #06b6d4 0%, #14b8a6 50%, #10b981 100%)",
-        "card-gradient": "linear-gradient(145deg, #ffffff 0%, #f8fafc 100%)",
-        "glow-card": "radial-gradient(circle at top right, rgba(6,182,212,0.08), transparent 70%)"
+        "hero-pattern": "radial-gradient(circle at 20% 20%, rgba(6,182,212,0.15), transparent 50%), linear-gradient(135deg, #0a0a0f 0%, #0f172a 100%)",
+        "glass-gradient": "linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%)"
       },
       backdropBlur: {
         xs: "2px",
@@ -180,7 +169,6 @@ export default {
     }
   },
   plugins: [
-    // Add custom utilities for line clamping and glass card
     function({ addUtilities }) {
       addUtilities({
         '.line-clamp-1': {
@@ -208,27 +196,25 @@ export default {
             display: 'none',
           },
         },
-        // Light theme glass card (no black background)
+        // Dark theme glass card (matches screenshot)
         '.glass-card': {
-          'background': 'rgba(255, 255, 255, 0.95)',
+          'background': 'rgba(17, 24, 39, 0.8)',
           'backdrop-filter': 'blur(12px)',
           'border-radius': '1.5rem',
-          'border': '1px solid rgba(226, 232, 240, 0.8)',
-          'box-shadow': '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
+          'border': '1px solid rgba(6, 182, 212, 0.2)',
+          'box-shadow': '0 8px 30px rgba(0, 0, 0, 0.3)',
           'transition': 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           '&:hover': {
             'transform': 'translateY(-4px)',
-            'border-color': 'rgba(6, 182, 212, 0.3)',
-            'box-shadow': '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.02)',
+            'border-color': 'rgba(6, 182, 212, 0.4)',
+            'box-shadow': '0 20px 35px -10px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(34,211,238,0.1)',
           },
         },
-        // Dark mode glass card (optional)
         '.glass-card-dark': {
-          'background': 'rgba(30, 41, 59, 0.95)',
+          'background': 'rgba(2, 6, 23, 0.95)',
           'backdrop-filter': 'blur(12px)',
           'border-radius': '1.5rem',
           'border': '1px solid rgba(51, 65, 85, 0.5)',
-          'color': '#f8fafc',
         },
         '.live-dot': {
           'position': 'relative',

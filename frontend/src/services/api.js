@@ -494,9 +494,18 @@ export const agentAPI = {
 };
 
 // ============================================
+// Admin API (Super admin operations)
+// ============================================
+export const adminAPI = {
+  listUsers: () => fetchAPI("/admin/users", { useCache: false }),
+  deleteUser: (userId) => fetchAPI(`/admin/users/${userId}`, { method: "DELETE", useCache: false }),
+  deleteInvite: (inviteId) => fetchAPI(`/admin/invites/${inviteId}`, { method: "DELETE", useCache: false }),
+  deleteMyAccount: () => fetchAPI("/admin/my-account", { method: "DELETE", useCache: false }),
+};
+
+// ============================================
 // Competitors API (for backward compatibility)
 // ============================================
-
 export const competitorsAPI = {
   getAll: async () => {
     console.log('[API] Fetching competitors');
@@ -536,6 +545,7 @@ const api = {
   audit: auditAPI,
   org: orgAPI,
   agent: agentAPI,
+  admin: adminAPI,               // ✅ Added adminAPI
   competitors: competitorsAPI,
   
   // Utility methods
