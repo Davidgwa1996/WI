@@ -14,13 +14,11 @@ import Dashboard from "./pages/Dashboard";
 import Projects from "./pages/Projects";
 import ProjectDetail from "./pages/ProjectDetail";
 import Competitors from "./pages/Competitors";
-
 import Watchlists from "./pages/Watchlists";
 import Reports from "./pages/Reports";
 import Briefings from "./pages/Briefings";
 import SearchIntel from "./pages/SearchIntel";
 import AgentChat from "./pages/AgentChat";
-
 import WorkspaceSettings from "./pages/WorkspaceSettings";
 import TeamInvites from "./pages/TeamInvites";
 import TeamMembers from "./pages/TeamMembers";
@@ -33,7 +31,7 @@ import AuditLogs from "./pages/AuditLogs";
 import AdminRoles from "./pages/AdminRoles";
 import ApiDocsPage from "./pages/ApiDocsPage";
 import Organizations from "./pages/Organizations";
-import AdminPanel from "./pages/AdminPanel"; // ✅ new super admin panel
+import AdminPanel from "./pages/AdminPanel"; // Super admin panel
 
 import ErrorBoundary from "./components/ErrorBoundary";
 import "./index.css";
@@ -44,14 +42,14 @@ function App() {
       <AuthProvider>
         <BrowserRouter>
           <Routes>
-            {/* Public routes (no auth required) */}
+            {/* Public routes – no authentication required */}
             <Route path="/" element={<Landing />} />
             <Route path="/home" element={<Navigate to="/" replace />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/accept-invite" element={<AcceptInvite />} />
 
-            {/* Routes that are viewable in public preview mode (with demo banner) */}
+            {/* All other routes are publicly viewable (preview mode) */}
             <Route
               path="/dashboard"
               element={
@@ -60,7 +58,6 @@ function App() {
                 </PublicRoute>
               }
             />
-
             <Route
               path="/projects"
               element={
@@ -69,7 +66,6 @@ function App() {
                 </PublicRoute>
               }
             />
-
             <Route
               path="/projects/:id"
               element={
@@ -78,7 +74,6 @@ function App() {
                 </PublicRoute>
               }
             />
-
             <Route
               path="/competitors"
               element={
@@ -87,7 +82,6 @@ function App() {
                 </PublicRoute>
               }
             />
-
             <Route
               path="/watchlists"
               element={
@@ -96,7 +90,6 @@ function App() {
                 </PublicRoute>
               }
             />
-
             <Route
               path="/reports"
               element={
@@ -105,7 +98,6 @@ function App() {
                 </PublicRoute>
               }
             />
-
             <Route
               path="/briefings"
               element={
@@ -114,7 +106,6 @@ function App() {
                 </PublicRoute>
               }
             />
-
             <Route
               path="/search-intel"
               element={
@@ -123,7 +114,6 @@ function App() {
                 </PublicRoute>
               }
             />
-
             <Route
               path="/agent"
               element={
@@ -132,7 +122,6 @@ function App() {
                 </PublicRoute>
               }
             />
-
             <Route
               path="/workspace"
               element={
@@ -141,7 +130,6 @@ function App() {
                 </PublicRoute>
               }
             />
-
             <Route
               path="/team"
               element={
@@ -150,7 +138,6 @@ function App() {
                 </PublicRoute>
               }
             />
-
             <Route
               path="/members"
               element={
@@ -161,7 +148,6 @@ function App() {
                 </PublicRoute>
               }
             />
-
             <Route
               path="/account"
               element={
@@ -170,7 +156,6 @@ function App() {
                 </PublicRoute>
               }
             />
-
             <Route
               path="/api-keys"
               element={
@@ -179,7 +164,6 @@ function App() {
                 </PublicRoute>
               }
             />
-
             <Route
               path="/billing"
               element={
@@ -188,7 +172,6 @@ function App() {
                 </PublicRoute>
               }
             />
-
             <Route
               path="/billing/success"
               element={
@@ -197,7 +180,6 @@ function App() {
                 </PublicRoute>
               }
             />
-
             <Route
               path="/billing/cancel"
               element={
@@ -206,7 +188,6 @@ function App() {
                 </PublicRoute>
               }
             />
-
             <Route
               path="/audit-logs"
               element={
@@ -215,7 +196,6 @@ function App() {
                 </PublicRoute>
               }
             />
-
             <Route
               path="/admin/roles"
               element={
@@ -226,7 +206,6 @@ function App() {
                 </PublicRoute>
               }
             />
-
             <Route
               path="/api-docs"
               element={
@@ -235,8 +214,6 @@ function App() {
                 </PublicRoute>
               }
             />
-
-            {/* Organizations page (super admin can see all, owners see their own) */}
             <Route
               path="/organizations"
               element={
@@ -245,8 +222,6 @@ function App() {
                 </PublicRoute>
               }
             />
-
-            {/* Super admin panel – only accessible to super admin (enforced inside component) */}
             <Route
               path="/admin"
               element={
@@ -256,7 +231,7 @@ function App() {
               }
             />
 
-            {/* Catch-all redirect */}
+            {/* Fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>

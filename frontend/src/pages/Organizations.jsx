@@ -4,8 +4,12 @@ import DashboardShell from "../components/dashboard/DashboardShell";
 import Topbar from "../components/dashboard/Topbar";
 import SectionCard from "../components/settings/SectionCard";
 import { orgAPI } from "../services/api";
+import { useAuth } from "../context/AuthContext";
 
 const Organizations = () => {
+  const { user } = useAuth();
+  const isLoggedIn = !!user;
+
   const [organizations, setOrganizations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedOrgs, setSelectedOrgs] = useState(new Set());
@@ -55,6 +59,10 @@ const Organizations = () => {
   };
 
   const deleteSelected = async () => {
+    if (!isLoggedIn) {
+      setError("You must be logged in to delete organizations.");
+      return;
+    }
     if (selectedOrgs.size === 0) {
       setError("No organizations selected");
       return;
@@ -88,6 +96,10 @@ const Organizations = () => {
   };
 
   const deleteSingle = async (orgId, orgName) => {
+    if (!isLoggedIn) {
+      setError("You must be logged in to delete an organization.");
+      return;
+    }
     if (!window.confirm(`Delete organization "${orgName}"? This will delete all associated data.`)) {
       return;
     }
@@ -110,7 +122,7 @@ const Organizations = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 xl:flex">
+    <div className="min-h-screen bg-dark-bg text-dark-text xl:flex">
       <Sidebar />
       <div className="flex-1">
         <DashboardShell>
@@ -123,12 +135,12 @@ const Organizations = () => {
             subtitle="View, select, and delete any organization (super admin privilege)"
           >
             {error && (
-              <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">
+              <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">
                 {error}
                 {debugInfo && process.env.NODE_ENV === "development" && (
-                  <details className="mt-2 text-xs text-red-500">
+                  <details className="mt-2 text-xs text-red-300">
                     <summary>Debug info</summary>
-                    <pre className="mt-1 overflow-auto rounded bg-red-100 p-2">
+                    <pre className="mt-1 overflow-auto rounded bg-red-900/20 p-2">
                       {JSON.stringify(debugInfo, null, 2)}
                     </pre>
                   </details>
@@ -136,7 +148,7 @@ const Organizations = () => {
               </div>
             )}
             {success && (
-              <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-600">
+              <div className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-400">
                 {success}
               </div>
             )}
@@ -145,21 +157,21 @@ const Organizations = () => {
               <div className="flex gap-2">
                 <button
                   onClick={selectAll}
-                  className="rounded-lg bg-cyan-100 px-3 py-1 text-sm font-medium text-cyan-700 hover:bg-cyan-200"
+                  className="rounded-lg bg-cyan-500/20 px-3 py-1 text-sm font-medium text-cyan-400 hover:bg-cyan-500/30"
                 >
                   {selectedOrgs.size === organizations.length ? "Deselect All" : "Select All"}
                 </button>
                 <button
                   onClick={loadOrgs}
                   disabled={loading}
-                  className="rounded-lg bg-slate-100 px-3 py-1 text-sm font-medium text-slate-600 hover:bg-slate-200 disabled:opacity-50"
+                  className="rounded-lg bg-dark-panel px-3 py-1 text-sm font-medium text-slate-300 hover:bg-slate-800 disabled:opacity-50"
                 >
                   {loading ? "Refreshing..." : "Refresh"}
                 </button>
               </div>
               <button
                 onClick={deleteSelected}
-                disabled={deleting || selectedOrgs.size === 0}
+                disabled={deleting || selectedOrgs.size === 0 || !isLoggedIn}
                 className="rounded-lg bg-red-600 px-3 py-1 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-50"
               >
                 {deleting ? "Deleting..." : `Delete Selected (${selectedOrgs.size})`}
@@ -168,12 +180,12 @@ const Organizations = () => {
 
             {loading ? (
               <div className="flex items-center justify-center py-12">
-                <div className="h-8 w-8 animate-spin rounded-full border-4 border-cyan-200 border-t-cyan-600"></div>
-                <span className="ml-3 text-slate-500">Loading organizations...</span>
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-cyan-500/30 border-t-cyan-500"></div>
+                <span className="ml-3 text-slate-400">Loading organizations...</span>
               </div>
             ) : organizations.length === 0 ? (
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-12 text-center text-slate-500">
-                <svg className="mx-auto h-12 w-12 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="rounded-2xl border border-slate-800 bg-dark-panel p-12 text-center text-slate-400">
+                <svg className="mx-auto h-12 w-12 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                 </svg>
                 <p className="mt-2">No organizations found.</p>
@@ -184,18 +196,19 @@ const Organizations = () => {
                 {organizations.map((org) => (
                   <div
                     key={org.id}
-                    className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-5 transition-all hover:shadow-md"
+                    className="flex items-center justify-between rounded-2xl border border-slate-800 bg-dark-panel p-5 transition-all hover:border-cyan-500/30 hover:shadow-glow"
                   >
                     <div className="flex items-center gap-4">
                       <input
                         type="checkbox"
                         checked={selectedOrgs.has(org.id)}
                         onChange={() => toggleSelect(org.id)}
-                        className="h-4 w-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+                        disabled={!isLoggedIn}
+                        className="h-4 w-4 rounded border-slate-600 bg-dark-card text-cyan-500 focus:ring-cyan-500 disabled:opacity-50"
                       />
                       <div>
-                        <div className="font-bold text-slate-900">{org.name}</div>
-                        <div className="mt-1 flex flex-wrap gap-3 text-sm text-slate-500">
+                        <div className="font-bold text-dark-text">{org.name}</div>
+                        <div className="mt-1 flex flex-wrap gap-3 text-sm text-slate-400">
                           <span>Slug: {org.slug}</span>
                           <span>•</span>
                           <span>ID: {org.id}</span>
@@ -208,7 +221,8 @@ const Organizations = () => {
                     </div>
                     <button
                       onClick={() => deleteSingle(org.id, org.name)}
-                      className="rounded-lg bg-red-100 px-3 py-1.5 text-sm font-medium text-red-600 transition hover:bg-red-200"
+                      disabled={!isLoggedIn}
+                      className="rounded-lg bg-red-500/20 px-3 py-1.5 text-sm font-medium text-red-400 transition hover:bg-red-500/30 disabled:opacity-50"
                     >
                       Delete
                     </button>

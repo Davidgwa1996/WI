@@ -184,14 +184,14 @@ const Projects = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 xl:flex">
+      <div className="min-h-screen bg-dark-bg xl:flex">
         <Sidebar />
         <div className="min-w-0 flex-1">
           <DashboardShell>
             <div className="flex min-h-[60vh] items-center justify-center">
               <div className="text-center">
                 <div className="loading-spinner mx-auto" />
-                <p className="mt-4 font-medium text-slate-600">
+                <p className="mt-4 font-medium text-slate-400">
                   Loading projects...
                 </p>
               </div>
@@ -204,7 +204,7 @@ const Projects = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-slate-50 xl:flex">
+      <div className="min-h-screen bg-dark-bg xl:flex">
         <Sidebar />
         <div className="min-w-0 flex-1">
           <DashboardShell>
@@ -216,7 +216,7 @@ const Projects = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 xl:flex">
+    <div className="min-h-screen bg-dark-bg text-dark-text xl:flex">
       <Sidebar />
 
       <div className="min-w-0 flex-1">
@@ -264,29 +264,29 @@ const Projects = () => {
           <div className="glass-card p-6 md:p-8">
             <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
               <div>
-                <div className="mb-2 inline-flex rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1 text-xs font-semibold text-cyan-700">
+                <div className="mb-2 inline-flex rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-400">
                   Project intelligence
                 </div>
-                <h2 className="text-3xl font-black tracking-tight text-slate-900">
+                <h2 className="text-3xl font-black tracking-tight text-dark-text">
                   Project Explorer
                 </h2>
-                <p className="mt-2 text-sm text-slate-500">
+                <p className="mt-2 text-sm text-slate-400">
                   Browse all tracked Web3 opportunities with conviction, risk
                   context, and intelligence-led summaries.
                 </p>
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
-                  <span className="text-slate-500">Average Score: </span>
-                  <span className="font-bold text-slate-900">{avgScore}</span>
+                <div className="rounded-2xl border border-slate-800 bg-dark-panel px-4 py-3 text-sm">
+                  <span className="text-slate-400">Average Score: </span>
+                  <span className="font-bold text-cyan-400">{avgScore}</span>
                 </div>
 
                 <button
                   type="button"
                   onClick={handleRefresh}
                   disabled={refreshing}
-                  className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 bg-white px-4 py-2.5 font-semibold text-slate-800 transition hover:bg-slate-50 disabled:opacity-70"
+                  className="inline-flex items-center gap-2 rounded-2xl border border-slate-700 bg-dark-panel px-4 py-2.5 font-semibold text-dark-text transition hover:bg-slate-800 disabled:opacity-70"
                 >
                   <FiRefreshCw
                     className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
@@ -297,14 +297,14 @@ const Projects = () => {
             </div>
 
             {enrichedProjects.length === 0 ? (
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-10 text-center">
+              <div className="rounded-2xl border border-slate-800 bg-dark-panel p-10 text-center">
                 <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-cyan-500/10">
                   <FiFolder className="h-10 w-10 text-cyan-500" />
                 </div>
-                <h3 className="mb-2 text-lg font-semibold text-slate-900">
+                <h3 className="mb-2 text-lg font-semibold text-dark-text">
                   No projects available
                 </h3>
-                <p className="text-slate-500">
+                <p className="text-slate-400">
                   No tracked projects were returned from the backend.
                 </p>
               </div>
@@ -314,29 +314,29 @@ const Projects = () => {
                   <Link
                     key={project.id}
                     to={`/projects/${project.id}`}
-                    className="glass-card block p-6 transition-all duration-300 hover:-translate-y-1"
+                    className="glass-card block p-6 transition-all duration-300 hover:-translate-y-1 hover:border-cyan-500/30 hover:shadow-glow"
                   >
                     <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
                       <div>
                         <div className="mb-2 flex flex-wrap items-center gap-3">
-                          <h3 className="text-2xl font-black tracking-tight text-slate-900">
+                          <h3 className="text-2xl font-black tracking-tight text-dark-text">
                             {project.name || "Untitled Project"}
                           </h3>
 
                           {project.sector ? (
-                            <span className="rounded-full bg-cyan-500/10 px-3 py-1 text-xs font-bold text-cyan-600">
+                            <span className="rounded-full bg-cyan-500/20 px-3 py-1 text-xs font-bold text-cyan-300">
                               {project.sector}
                             </span>
                           ) : null}
 
                           {project.stage ? (
-                            <span className="rounded-full bg-blue-500/10 px-3 py-1 text-xs font-bold text-blue-600">
+                            <span className="rounded-full bg-blue-500/20 px-3 py-1 text-xs font-bold text-blue-300">
                               {project.stage}
                             </span>
                           ) : null}
                         </div>
 
-                        <p className="max-w-2xl text-sm leading-6 text-slate-600">
+                        <p className="max-w-2xl text-sm leading-6 text-slate-300">
                           {project.description ||
                             "No description available for this project."}
                         </p>
@@ -346,36 +346,36 @@ const Projects = () => {
                     </div>
 
                     <div className="mb-5 grid gap-4 sm:grid-cols-3">
-                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="rounded-2xl border border-slate-800 bg-dark-panel p-4">
                         <div className="text-xs uppercase tracking-wide text-slate-400">
                           Conviction Score
                         </div>
-                        <div className="mt-2 text-2xl font-black text-slate-900">
+                        <div className="mt-2 text-2xl font-black text-cyan-400">
                           {project.convictionScore}%
                         </div>
                       </div>
 
-                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="rounded-2xl border border-slate-800 bg-dark-panel p-4">
                         <div className="text-xs uppercase tracking-wide text-slate-400">
                           Market Cap
                         </div>
-                        <div className="mt-2 text-2xl font-black text-slate-900">
+                        <div className="mt-2 text-2xl font-black text-dark-text">
                           {formatMoneyCompact(project.market_cap)}
                         </div>
                       </div>
 
-                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="rounded-2xl border border-slate-800 bg-dark-panel p-4">
                         <div className="text-xs uppercase tracking-wide text-slate-400">
                           TVL
                         </div>
-                        <div className="mt-2 text-2xl font-black text-slate-900">
+                        <div className="mt-2 text-2xl font-black text-dark-text">
                           {formatMoneyCompact(project.tvl)}
                         </div>
                       </div>
                     </div>
 
                     <div className="mb-5 grid gap-4 sm:grid-cols-3">
-                      <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
+                      <div className="flex items-center gap-2 rounded-2xl border border-slate-800 bg-dark-panel p-4 text-sm text-slate-300">
                         <FiUsers className="h-4 w-4 text-slate-400" />
                         <span>
                           {Number(project.twitter_followers || 0).toLocaleString()}{" "}
@@ -383,7 +383,7 @@ const Projects = () => {
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
+                      <div className="flex items-center gap-2 rounded-2xl border border-slate-800 bg-dark-panel p-4 text-sm text-slate-300">
                         <FiGithub className="h-4 w-4 text-slate-400" />
                         <span>
                           {Number(project.github_stars || 0).toLocaleString()}{" "}
@@ -391,45 +391,45 @@ const Projects = () => {
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
+                      <div className="flex items-center gap-2 rounded-2xl border border-slate-800 bg-dark-panel p-4 text-sm text-slate-300">
                         <FiDollarSign className="h-4 w-4 text-slate-400" />
                         <span>{formatMoneyCompact(project.tvl)} TVL</span>
                       </div>
                     </div>
 
                     <div className="mb-4 grid gap-4 lg:grid-cols-2">
-                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                        <div className="mb-2 text-sm font-bold text-slate-900">
+                      <div className="rounded-2xl border border-slate-800 bg-dark-panel p-4">
+                        <div className="mb-2 text-sm font-bold text-dark-text">
                           Why now
                         </div>
-                        <p className="text-sm leading-6 text-slate-600">
+                        <p className="text-sm leading-6 text-slate-300">
                           {project.whyNow}
                         </p>
                       </div>
 
-                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                        <div className="mb-2 text-sm font-bold text-slate-900">
+                      <div className="rounded-2xl border border-slate-800 bg-dark-panel p-4">
+                        <div className="mb-2 text-sm font-bold text-dark-text">
                           Why caution
                         </div>
-                        <p className="text-sm leading-6 text-slate-600">
+                        <p className="text-sm leading-6 text-slate-300">
                           {project.whyCaution}
                         </p>
                       </div>
                     </div>
 
                     <div className="mb-5">
-                      <div className="mb-2 text-sm font-bold text-slate-900">
+                      <div className="mb-2 text-sm font-bold text-dark-text">
                         Risk Flags
                       </div>
                       <RiskFlags flags={project.riskFlags} />
                     </div>
 
-                    <div className="flex items-center justify-between border-t border-slate-200 pt-4">
-                      <span className="text-sm font-medium text-slate-500">
+                    <div className="flex items-center justify-between border-t border-slate-800 pt-4">
+                      <span className="text-sm font-medium text-slate-400">
                         View full intelligence
                       </span>
 
-                      <span className="inline-flex items-center gap-2 text-sm font-semibold text-cyan-700">
+                      <span className="inline-flex items-center gap-2 text-sm font-semibold text-cyan-400">
                         Open <FiArrowRight className="h-4 w-4" />
                       </span>
                     </div>

@@ -61,7 +61,7 @@ from app.routes import (
     agent_router,
 )
 from app.routes.uploads import router as uploads_router
-from app.routes.admin import router as admin_router  # ✅ super admin panel
+from app.routes.admin import router as admin_router
 
 
 # ============================================
@@ -379,7 +379,7 @@ app.include_router(search_router, prefix=settings.API_PREFIX, tags=["Search"])
 app.include_router(exports_router, prefix=settings.API_PREFIX, tags=["Exports"])
 app.include_router(agent_router, prefix=settings.API_PREFIX, tags=["AI Agent"])
 app.include_router(uploads_router, prefix=settings.API_PREFIX, tags=["Uploads"])
-app.include_router(admin_router, prefix=settings.API_PREFIX, tags=["Admin"])  # ✅ super admin routes
+app.include_router(admin_router, prefix=settings.API_PREFIX, tags=["Admin"])
 
 
 # ============================================
